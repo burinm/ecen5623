@@ -66,6 +66,10 @@
     #include <syslog.h>
     #define LOG(id, buffer) syslog(LOG_INFO, "%s", buffer)
 
+    /* catch signal */
+    #include <signal.h>
+    void ctrl_c(int addr);
+
 #endif
 
 
@@ -249,6 +253,10 @@ void start(void)
 #else
 int main()
 {
+    //install ctrl_c signal handler
+    struct sigaction action;
+    action.sa_handler = ctrl_c;
+    sigaction(SIGINT, &action, NULL);
     //from https://www.gnu.org/software/libc/manual/html_node/Syslog-Example.html
     openlog ("ex0", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL0);
 #endif
@@ -264,6 +272,19 @@ int main()
 
 #ifdef VXWORKS
 #else
+pthread_join(thread_fibS1, NULL);
+pthread_join(thread_fibS2, NULL);
+pthread_join(thread_fibS3, NULL);
+pthread_join(thread_Sequencer, NULL);
+
 closelog();
 #endif
 }
+
+#ifdef VXWORKS
+#else
+void ctrl_c(int addr)
+{
+    abortTest=1;
+}
+#endif
