@@ -32,6 +32,10 @@
     /* task delay */
     #define clockInit(c) sysClkRateSet(c)
     #define taskDelay(d) taskDelay(d)
+
+    /* log */
+    #define LOG(id, buffer) (if(wvEvent(id, buffer, sizeof(buffer)) == ERROR) \
+		                        printf("WV EVENT ERROR\n"))
 #else
     #include <stdio.h>
 
@@ -58,7 +62,12 @@
                          sleep_time.tv_nsec=(d * 1000); \
                          nanosleep(CLOCK_REALTIME, &remaining_time); \
 
+    /* log */
+    #include <syslog.h>
+    #define LOG(id, buffer) syslog(LOG_INFO, "%s", buffer)
+
 #endif
+
 
 #define FIB_LIMIT_FOR_32_BIT 47
 
@@ -196,8 +205,8 @@ void *Sequencer(void* v)
   /* Simulate the C.I. for S1 and S2 and mark on windview and log
      wvEvent first because F10 and F20 can preempt this task!
    */
-  if(wvEvent(0xC, ciMarker, sizeof(ciMarker)) == ERROR)
-	  printf("WV EVENT ERROR\n");
+  LOG(0xC, ciMarker);
+
   semGive(semS1); semGive(semS2); semGive(semS3);
 
 
@@ -226,16 +235,24 @@ void *Sequencer(void* v)
       taskDelay(2);                                 /* +30 */
 	  
 	  /* back to C.I. conditions, log event first due to preemption */
-	  if(wvEvent(0xC, ciMarker, sizeof(ciMarker)) == ERROR)
-		  printf("WV EVENT ERROR\n");
+      LOG(0xC, ciMarker);
+
 	  semGive(semS1); semGive(semS2); semGive(semS3);
   }  
  
 
 }
 
+#ifdef VXWORKS
 void start(void)
 {
+#else
+int main()
+{
+    //from https://www.gnu.org/software/libc/manual/html_node/Syslog-Example.html
+    openlog ("ex0", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL0);
+#endif
+
 	abortTest=0;
 
 	if(taskSpawn(Sequencer, 20))
@@ -245,4 +262,8 @@ void start(void)
 	else
 	  printf("Sequencer task spawn failed\n");
 
+#ifdef VXWORKS
+#else
+closelog();
+#endif
 }
