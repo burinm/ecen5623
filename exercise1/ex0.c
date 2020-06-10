@@ -21,11 +21,21 @@
     #include "semLib.h"
     #include "sysLib.h"
     #include "wvLib.h"
+
+    /* Semaphores */
 	#define semTake(s) semTake(s, WAIT_FOREVER)
     #define semInit(s) (s = semBCreate(SEM_Q_FIFO, SEM_EMPTY))
+
+    /* tasks */
     #define taskSpawn(t, pri) (taskSpawn("service- ## t", pri, 0, 8192, t, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) != ERROR)
+
+    /* task delay */
+    #define clockInit(c) sysClkRateSet(c)
+    #define taskDelay(d) taskDelay(d)
 #else
     #include <stdio.h>
+
+    /* Semaphores */
     #include <semaphore.h>
     #include <stdint.h>
     #define UINT32  uint32_t
@@ -33,11 +43,20 @@
     #define semInit(s) sem_init(&s, 1, 0)
     #define semGive(s) sem_post(&s)
 
+    /* tasks */
     #include <pthread.h>
     pthread_t thread_fibS1, thread_fibS2, thread_fibS3, thread_Sequencer;
     typedef struct { int threadIdx; } threadParams_t; //from example simplethread.c code
     threadParams_t threadParam_fibS1, threadParam_fibS2, threadParam_fibS3, threadParam_Sequencer;
     #define taskSpawn(t, pri) (pthread_create(&thread_ ## t, (void *)0, &t, (void*)&threadParam_ ## t ) == 0)
+
+    /* task delay */
+    #define clockInit(c) //Do nothing
+    static struct timespec remaining_time = {0, 0}; //from posix_clock.c example
+    static struct timespec sleep_time = {0, 0};
+    #define taskDelay(d) sleep_time.tv_sec=0; \
+                         sleep_time.tv_nsec=(d * 1000); \
+                         nanosleep(CLOCK_REALTIME, &remaining_time); \
 
 #endif
 
@@ -145,7 +164,7 @@ void *Sequencer(void* v)
   printf("Starting Sequencer\n");
 
   /* Just to be sure we have 1 msec tick and TOs */
-  sysClkRateSet(1000);
+  clockInit(1000);
 
   /* Set up service release semaphores */
   semInit(semS1);
