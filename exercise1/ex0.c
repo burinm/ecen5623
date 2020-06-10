@@ -23,6 +23,7 @@
     #include "wvLib.h"
 	#define semTake(s) semTake(s, WAIT_FOREVER)
     #define semInit(s) (s = semBCreate(SEM_Q_FIFO, SEM_EMPTY))
+    #define taskSpawn(t, pri) (taskSpawn("service- ## t", pri, 0, 8192, t, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) != ERROR)
 #else
     #include <stdio.h>
     #include <semaphore.h>
@@ -31,6 +32,12 @@
 	#define semTake(s) sem_wait(&s)
     #define semInit(s) sem_init(&s, 1, 0)
     #define semGive(s) sem_post(&s)
+
+    #include <pthread.h>
+    pthread_t thread_fibS1, thread_fibS2, thread_fibS3, thread_Sequencer;
+    typedef struct { int threadIdx; } threadParams_t; //from example simplethread.c code
+    threadParams_t threadParam_fibS1, threadParam_fibS2, threadParam_fibS3, threadParam_Sequencer;
+    #define taskSpawn(t, pri) (pthread_create(&thread_ ## t, (void *)0, &t, (void*)&threadParam_ ## t ) == 0)
 
 #endif
 
@@ -71,7 +78,11 @@ char ciMarker[]="CI";
    LCM.
    
  */
+#ifdef VXWORKS
 void fibS1(void)
+#else
+void *fibS1(void* v)
+#endif
 {
 UINT32 idx = 0, jdx = 1; 
 UINT32 fib = 0, fib0 = 0, fib1 = 1;
@@ -84,7 +95,11 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
    }
 }
 
+#ifdef VXWORKS
 void fibS2(void)
+#else
+void *fibS2(void* v)
+#endif
 {
 UINT32 idx = 0, jdx = 1; 
 UINT32 fib = 0, fib0 = 0, fib1 = 1;
@@ -97,9 +112,13 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
    }
 }
 
+#ifdef VXWORKS
 void fibS3(void)
+#else
+void *fibS3(void* v)
+#endif
 {
-UINT32 idx = 0, jdx = 1; 
+UINT32 idx = 0, jdx = 1;
 UINT32 fib = 0, fib0 = 0, fib1 = 1;
 
    while(!abortTest)
@@ -116,7 +135,11 @@ void shutdown(void)
 }
 
 
+#ifdef VXWORKS
 void Sequencer(void)
+#else
+void *Sequencer(void* v)
+#endif
 {
 
   printf("Starting Sequencer\n");
@@ -125,30 +148,30 @@ void Sequencer(void)
   sysClkRateSet(1000);
 
   /* Set up service release semaphores */
-  semInit(semS1); 
-  semInit(semS2); 
-  semInit(semS3); 
+  semInit(semS1);
+  semInit(semS2);
+  semInit(semS3);
  
-  if(taskSpawn("service-S1", 21, 0, 8192, fibS1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == ERROR)
+  if(taskSpawn(fibS1, 21))
   {
-    printf("S1 task spawn failed\n");
+    printf("S1 task spawned\n");
   }
   else
-    printf("S1 task spawned\n");
-
-  if(taskSpawn("service-S2", 22, 0, 8192, fibS2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == ERROR)
-  {
     printf("S1 task spawn failed\n");
+
+  if(taskSpawn(fibS2, 22))
+  {
+    printf("S1 task spawned\n");
   }
   else
-    printf("S1 task spawned\n");
+    printf("S1 task spawn failed\n");
 
-  if(taskSpawn("service-S3", 23, 0, 8192, fibS3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == ERROR) 
+  if(taskSpawn(fibS3, 23))
   {
+    printf("S3 task spawned\n");
+  }
+  else
     printf("S3 task spawn failed\n");
-  }
-  else
-    printf("S3 task spawned\n"); 
    
 
   /* Simulate the C.I. for S1 and S2 and mark on windview and log
@@ -196,12 +219,11 @@ void start(void)
 {
 	abortTest=0;
 
-	if(taskSpawn("Sequencer", 20, 0, 8192, Sequencer, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == ERROR)
+	if(taskSpawn(Sequencer, 20))
 	{
-	  printf("Sequencer task spawn failed\n");
+	  printf("Sequencer task spawned\n");
 	}
 	else
-	  printf("Sequencer task spawned\n");
+	  printf("Sequencer task spawn failed\n");
 
 }
-                                                                  
