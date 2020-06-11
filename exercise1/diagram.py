@@ -16,6 +16,7 @@ except:
     sys.exit(0)
     
 timestamp = None
+first_timestamp = None
 last_timestamp = None
 last_service = None
 
@@ -28,14 +29,24 @@ for l in data_file:
         if len(values) == 2:
             (timestamp, service) = values
 
-            # Timestamps are in ns, convert to usec
-            timestamp = int((int(timestamp) / 1000))
+            # Timestamps are in ns, convert to ms
+            timestamp = int((int(timestamp) / 1000000))
+
+# absolute
+#            if first_timestamp == None:
+#                first_timestamp = timestamp
+#            else:
+#                print(timestamp - first_timestamp, end = '\n')
+#
+#            print("{0}".format(service), end = ' ')
 
             if last_timestamp != None:
-                print(timestamp - last_timestamp, end = ' ')
+                print(timestamp - last_timestamp, end = '\n')
 
-            if last_service != service:
-                print("S{0}".format(service), end = ' ')
+            #if last_service != service:
+            #    print("S{0}".format(service), end = ' ')
+            print("S{0}".format(service), end = ' ')
+
             
 
             last_service = service

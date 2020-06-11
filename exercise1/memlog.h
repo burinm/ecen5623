@@ -24,21 +24,26 @@ typedef struct _memlog_g {
     memlog_s log[MEMLOG_MAX];
 } memlog_t;
 
-#define MEMLOG_E_NONE           0x0
-#define MEMLOG_E_S1_SCHEDULED   0x1
-#define MEMLOG_E_S2_SCHEDULED   0x2
-#define MEMLOG_E_S3_SCHEDULED   0x3
+#define MEMLOG_E_NONE               0x0
+#define MEMLOG_E_S1_RUN             0x1
+#define MEMLOG_E_S2_RUN             0x2
+#define MEMLOG_E_S3_RUN             0x3
 
-#define MEMLOG_E_S1_RUN         0x11 
-#define MEMLOG_E_S2_RUN         0x12
-#define MEMLOG_E_S3_RUN         0x13
+#define MEMLOG_E_S1_SCHEDULED       0x11 
+#define MEMLOG_E_S2_SCHEDULED       0x12
+#define MEMLOG_E_S3_SCHEDULED       0x13
 
+#define MEMLOG_E_FIB_TEST           0xff
+
+#if 0
 #define MEMLOG_LOG(l, event, t)   (l)->log[(l)->index].event_id = event; \
                                clock_gettime(CLOCK_REALTIME, &(l)->log[(l)->index].time); \
                                (l)->index++; \
                                if ((l)->index == MEMLOG_MAX) { \
                                     (l)->index = 0; \
                                } 
+#endif
+void MEMLOG_LOG(memlog_t* l, uint32_t event);
 
 
 memlog_t* memlog_init();

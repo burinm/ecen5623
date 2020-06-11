@@ -16,6 +16,26 @@
 /*
 /****************************************************************************/
 
+/* burin - Exercise 1, part #4
+
+    S1: T1 = 2 C1 = 1
+    S2: T2 = 5 C2 = 2
+
+    Utotal = 90%, LUB = 82.8%
+*/
+
+#define T_UNIT  10000
+#define T1 20000
+#define T2 50000
+
+//Tested in fibtest
+#define C1 800000
+#define C2 1700000
+
+
+
+
+
 #ifdef VXWORKS
     #include "vxWorks.h"
     #include "semLib.h"
@@ -44,14 +64,14 @@
     #include <stdint.h>
     #define UINT32  uint32_t
 	#define semTake(s) sem_wait(&s)
-    #define semInit(s) sem_init(&s, 1, 1)
+    #define semInit(s) sem_init(&s, 1, 0)
     #define semGive(s) sem_post(&s)
 
     /* tasks */
     #include <pthread.h>
-    pthread_t thread_fibS1, thread_fibS2, thread_fibS3, thread_Sequencer;
+    pthread_t thread_fibS1, thread_fibS2, thread_Sequencer;
     typedef struct { int threadIdx; } threadParams_t; //from example simplethread.c code
-    threadParams_t threadParam_fibS1, threadParam_fibS2, threadParam_fibS3, threadParam_Sequencer;
+    threadParams_t threadParam_fibS1, threadParam_fibS2, threadParam_Sequencer;
     #define taskSpawn(t, pri) (pthread_create(&thread_ ## t, (void *)0, &t, (void*)&threadParam_ ## t ) == 0)
 
     /* task delay */
@@ -77,20 +97,19 @@
 //3 logs to rule them all
 memlog_t* S1_LOG;
 memlog_t* S2_LOG;
-memlog_t* S3_LOG;
 
 
 #define FIB_LIMIT_FOR_32_BIT 47
 
 #ifdef VXWORKS
-    SEM_ID semS1, semS2, semS3; 
+    SEM_ID semS1, semS2;
 #else
-    sem_t semS1, semS2, semS3; 
+    sem_t semS1, semS2;
 #endif
 
 int abortTest = 0;
 UINT32 seqIterations = FIB_LIMIT_FOR_32_BIT;
-UINT32 fib1Cnt=0, fib2Cnt=0, fib3Cnt=0;
+UINT32 fib1Cnt=0, fib2Cnt=0;
 char ciMarker[]="CI";
 
 
@@ -128,10 +147,10 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
 
    while(!abortTest)
    {
-//MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_SCHEDULED, 0);
+//MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_SCHEDULED);
 	   semTake(semS1);
-MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_RUN, 0);
-	   FIB_TEST(seqIterations, 17500, idx, jdx, fib, fib0, fib1);
+MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_RUN);
+	   FIB_TEST(seqIterations, C1, idx, jdx, fib, fib0, fib1);
 	   fib1Cnt++;
    }
 }
@@ -147,30 +166,11 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
 
    while(!abortTest)
    {
-//MEMLOG_LOG(S2_LOG, MEMLOG_E_S2_SCHEDULED, 0);
+//MEMLOG_LOG(S2_LOG, MEMLOG_E_S2_SCHEDULED);
 	   semTake(semS2);
-MEMLOG_LOG(S2_LOG, MEMLOG_E_S2_RUN, 0);
-	   FIB_TEST(seqIterations, 17500, idx, jdx, fib, fib0, fib1);
+MEMLOG_LOG(S2_LOG, MEMLOG_E_S2_RUN);
+	   FIB_TEST(seqIterations, C2, idx, jdx, fib, fib0, fib1);
 	   fib2Cnt++;
-   }
-}
-
-#ifdef VXWORKS
-void fibS3(void)
-#else
-void *fibS3(void* v)
-#endif
-{
-UINT32 idx = 0, jdx = 1;
-UINT32 fib = 0, fib0 = 0, fib1 = 1;
-
-   while(!abortTest)
-   {
-//MEMLOG_LOG(S3_LOG, MEMLOG_E_S3_SCHEDULED, 0);
-	   semTake(semS3);
-MEMLOG_LOG(S3_LOG, MEMLOG_E_S3_RUN, 0);
-	   FIB_TEST(seqIterations, 35000, idx, jdx, fib, fib0, fib1);
-	   fib3Cnt++;
    }
 }
 
@@ -195,7 +195,6 @@ void *Sequencer(void* v)
   /* Set up service release semaphores */
   semInit(semS1);
   semInit(semS2);
-  semInit(semS3);
  
   if(taskSpawn(fibS1, 21))
   {
@@ -206,33 +205,55 @@ void *Sequencer(void* v)
 
   if(taskSpawn(fibS2, 22))
   {
-    printf("S1 task spawned\n");
+    printf("S2 task spawned\n");
   }
   else
-    printf("S1 task spawn failed\n");
+    printf("S2 task spawn failed\n");
 
-  if(taskSpawn(fibS3, 23))
-  {
-    printf("S3 task spawned\n");
-  }
-  else
-    printf("S3 task spawn failed\n");
-   
 
   /* Simulate the C.I. for S1 and S2 and mark on windview and log
      wvEvent first because F10 and F20 can preempt this task!
    */
   //LOG(0xC, ciMarker);
 
-  semGive(semS1); semGive(semS2); semGive(semS3);
+  //Can't trust that pthreads will start in order!
+  //semGive(semS1); semGive(semS2);
 
 
   /* Sequencing loop for LCM phasing of S1, S2
    */
-  int iters = 1000;
+  //int iters = 250;
+  int iters = 100000;
   while(!abortTest && iters)
   {
 
+    /*
+        Schedule:
+
+        [ 1][ 2][ 3][ 4][ 5][ 6][ 7][ 8][ 9][10]
+        (S1)    (S1)    (S1)    (S1)    (S1)****
+            (S2)    (S2)    (S2)    (S2)    ****
+
+        Deadlines:
+
+        <----D1><----D1><----D1><----D1><----D1>
+        <----------------D2><----------------D2>
+    */
+
+        //Start with delay, (looped from end of schedule)
+        taskDelay(T_UNIT); semGive(semS1);          // 0-1
+        taskDelay(T_UNIT); semGive(semS2);          // 1-2
+        taskDelay(T_UNIT); semGive(semS1);          // 2-3
+        taskDelay(T_UNIT); semGive(semS2);          // 3-4
+        taskDelay(T_UNIT); semGive(semS1);          // 4-5
+        taskDelay(T_UNIT); semGive(semS2);          // 5-6
+        taskDelay(T_UNIT); semGive(semS1);          // 6-7
+        taskDelay(T_UNIT); semGive(semS2);          // 7-8
+        taskDelay(T_UNIT); semGive(semS1);          // 8-9
+        taskDelay(T_UNIT);                          // 9-0
+
+
+#if 0
 	  /* Basic sequence of releases after CI */
       taskDelay(2); semGive(semS1);                 /* +2  */
       taskDelay(2); semGive(semS1);                 /* +4  */
@@ -254,12 +275,16 @@ void *Sequencer(void* v)
 
 	  /* back to C.I. conditions, log event first due to preemption */
       //LOG(0xC, ciMarker);
+#endif
 
-	  semGive(semS1); semGive(semS2); semGive(semS3);
+        //Why?, was this for vxWorks logging ??
+	  //semGive(semS1); semGive(semS2);
 
       iters--;
   }  
  
+    abortTest = 1;
+    semGive(semS1); semGive(semS2);
 
 }
 
@@ -274,13 +299,12 @@ int main()
     action.sa_handler = ctrl_c;
     sigaction(SIGINT, &action, NULL);
     //from https://www.gnu.org/software/libc/manual/html_node/Syslog-Example.html
-    openlog ("ex0", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL0);
+    //openlog ("ex0", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL0);
 #endif
 
     //quick logging facility for timing
     S1_LOG = memlog_init();
     S2_LOG = memlog_init();
-    S3_LOG = memlog_init();
 
 	abortTest=0;
 
@@ -295,19 +319,19 @@ int main()
 #else
 pthread_join(thread_fibS1, NULL);
 pthread_join(thread_fibS2, NULL);
-pthread_join(thread_fibS3, NULL);
 pthread_join(thread_Sequencer, NULL);
 
-closelog();
+//closelog();
 #endif
 
-printf("fib1Cnt=%d, fib2Cnt=%d, fib3Cnt=%d\n", fib1Cnt, fib2Cnt, fib3Cnt);
+printf("fib1Cnt=%d, fib2Cnt=%d\n", fib1Cnt, fib2Cnt);
 //memlog_dump(S1_LOG);
 //memlog_dump(S2_LOG);
-//memlog_dump(S3_LOG);
 memlog_gnuplot_dump(S1_LOG);
 memlog_gnuplot_dump(S2_LOG);
-memlog_gnuplot_dump(S3_LOG);
+
+memlog_free(S1_LOG);
+memlog_free(S2_LOG);
 }
 
 #ifdef VXWORKS

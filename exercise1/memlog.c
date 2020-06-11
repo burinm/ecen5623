@@ -1,10 +1,14 @@
- #include <stdlib.h> //calloc, free
+#include <stdlib.h> //calloc, free
 #include <stdio.h>
+#include <assert.h>
 #include "memlog.h"
 
 memlog_t* memlog_init() {
-    //TODO - any error checking lol
-    return ((memlog_t*)calloc(1, sizeof(memlog_t)));
+    memlog_t* mem_log = (memlog_t*)calloc(1, sizeof(memlog_t));
+    if (!mem_log) {
+        printf("Error: couldn't allocate memory\n");
+        exit(-1);
+    }
 }
 
 void memlog_free(memlog_t* m) {
@@ -12,6 +16,17 @@ void memlog_free(memlog_t* m) {
         free(m);
     }
 }
+
+inline void MEMLOG_LOG(memlog_t* l, uint32_t event) {
+    assert(l->index < MEMLOG_MAX);
+    l->log[l->index].event_id = event;
+    clock_gettime(CLOCK_REALTIME, &l->log[l->index].time);
+    l->index++;
+    if (l->index >= MEMLOG_MAX) {
+        l->index = 0;
+    }
+}
+
 
 void memlog_dump(memlog_t* l) {
     uint64_t t = 0;
@@ -73,6 +88,10 @@ char* memlog_event_desc(uint32_t e) {
 
         case MEMLOG_E_S3_RUN:
             return "MEMLOG_E_S3_RUN";
+            break;
+
+        case MEMLOG_E_FIB_TEST:
+            return "FIBTEST_MARK";
             break;
     };
 
