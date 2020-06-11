@@ -1,19 +1,34 @@
+ #include <stdlib.h> //calloc, free
 #include <stdio.h>
 #include "memlog.h"
 
-memlog_g memlog_globals;
+memlog_t* memlog_init() {
+    //TODO - any error checking lol
+    return ((memlog_t*)calloc(1, sizeof(memlog_t)));
+}
 
-void memlog_dump() {
+void memlog_free(memlog_t* m) {
+    if (m) {
+        free(m);
+    }
+}
+
+void memlog_dump(memlog_t* l) {
+    uint64_t t = 0;
+    uint64_t t_prev = time_in_ns(l->log[0].time);
+
     for (int i=0; i < MEMLOG_MAX; i++) {
-        uint64_t t = time_in_ns(memlog_globals.log[i].time);        
+        t = time_in_ns(l->log[i].time);        
         //Use llx, or else 64 bit number overflows printf vargs
 /*
-        printf("%0.11d.%0.9d [%s]\n", memlog_globals.log[i].time.tv_sec,
-                                  memlog_globals.log[i].time.tv_nsec,
-                                  memlog_event_desc(memlog_globals.log[i].event_id));
+        printf("%0.11d.%0.9d [%s]\n", l->log[i].time.tv_sec,
+                                  l->log[i].time.tv_nsec,
+                                  memlog_event_desc(l->log[i].event_id));
 */
-        printf("%0.11lld [%s]\n", t, 
-                                  memlog_event_desc(memlog_globals.log[i].event_id));
+        printf("%0.11lld [%s]", t, 
+                                  memlog_event_desc(l->log[i].event_id));
+        printf("%s", (t < t_prev) ? " *not monotonic\n" : "\n");
+        t_prev = t;
     }
 }
 
