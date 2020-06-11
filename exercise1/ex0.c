@@ -44,7 +44,7 @@
     #include <stdint.h>
     #define UINT32  uint32_t
 	#define semTake(s) sem_wait(&s)
-    #define semInit(s) sem_init(&s, 1, 0)
+    #define semInit(s) sem_init(&s, 1, 1)
     #define semGive(s) sem_post(&s)
 
     /* tasks */
@@ -71,6 +71,13 @@
     void ctrl_c(int addr);
 
 #endif
+
+#include "memlog.h"
+
+//3 logs to rule them all
+memlog_t* S1_LOG;
+memlog_t* S2_LOG;
+memlog_t* S3_LOG;
 
 
 #define FIB_LIMIT_FOR_32_BIT 47
@@ -121,7 +128,9 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
 
    while(!abortTest)
    {
+//MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_SCHEDULED, 0);
 	   semTake(semS1);
+MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_RUN, 0);
 	   FIB_TEST(seqIterations, 17500, idx, jdx, fib, fib0, fib1);
 	   fib1Cnt++;
    }
@@ -138,7 +147,9 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
 
    while(!abortTest)
    {
+//MEMLOG_LOG(S2_LOG, MEMLOG_E_S2_SCHEDULED, 0);
 	   semTake(semS2);
+MEMLOG_LOG(S2_LOG, MEMLOG_E_S2_RUN, 0);
 	   FIB_TEST(seqIterations, 17500, idx, jdx, fib, fib0, fib1);
 	   fib2Cnt++;
    }
@@ -155,7 +166,9 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
 
    while(!abortTest)
    {
+//MEMLOG_LOG(S3_LOG, MEMLOG_E_S3_SCHEDULED, 0);
 	   semTake(semS3);
+MEMLOG_LOG(S3_LOG, MEMLOG_E_S3_RUN, 0);
 	   FIB_TEST(seqIterations, 35000, idx, jdx, fib, fib0, fib1);
 	   fib3Cnt++;
    }
@@ -209,14 +222,15 @@ void *Sequencer(void* v)
   /* Simulate the C.I. for S1 and S2 and mark on windview and log
      wvEvent first because F10 and F20 can preempt this task!
    */
-  LOG(0xC, ciMarker);
+  //LOG(0xC, ciMarker);
 
   semGive(semS1); semGive(semS2); semGive(semS3);
 
 
   /* Sequencing loop for LCM phasing of S1, S2
    */
-  while(!abortTest)
+  int iters = 1000;
+  while(!abortTest && iters)
   {
 
 	  /* Basic sequence of releases after CI */
@@ -237,11 +251,13 @@ void *Sequencer(void* v)
       taskDelay(2); semGive(semS1);                 /* +26 */
       taskDelay(2); semGive(semS1);                 /* +28 */
       taskDelay(2);                                 /* +30 */
-	  
+
 	  /* back to C.I. conditions, log event first due to preemption */
-      LOG(0xC, ciMarker);
+      //LOG(0xC, ciMarker);
 
 	  semGive(semS1); semGive(semS2); semGive(semS3);
+
+      iters--;
   }  
  
 
@@ -261,6 +277,11 @@ int main()
     openlog ("ex0", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL0);
 #endif
 
+    //quick logging facility for timing
+    S1_LOG = memlog_init();
+    S2_LOG = memlog_init();
+    S3_LOG = memlog_init();
+
 	abortTest=0;
 
 	if(taskSpawn(Sequencer, 20))
@@ -279,6 +300,14 @@ pthread_join(thread_Sequencer, NULL);
 
 closelog();
 #endif
+
+printf("fib1Cnt=%d, fib2Cnt=%d, fib3Cnt=%d\n", fib1Cnt, fib2Cnt, fib3Cnt);
+//memlog_dump(S1_LOG);
+//memlog_dump(S2_LOG);
+//memlog_dump(S3_LOG);
+memlog_gnuplot_dump(S1_LOG);
+memlog_gnuplot_dump(S2_LOG);
+memlog_gnuplot_dump(S3_LOG);
 }
 
 #ifdef VXWORKS

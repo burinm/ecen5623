@@ -15,20 +15,33 @@ void memlog_free(memlog_t* m) {
 
 void memlog_dump(memlog_t* l) {
     uint64_t t = 0;
-    uint64_t t_prev = time_in_ns(l->log[0].time);
+    uint64_t t_prev = time_in_ns(l->log[0].time); //TODO, problem if first entry is MEMLOG_E_NONE
 
     for (int i=0; i < MEMLOG_MAX; i++) {
-        t = time_in_ns(l->log[i].time);        
-        //Use llx, or else 64 bit number overflows printf vargs
-/*
-        printf("%0.11d.%0.9d [%s]\n", l->log[i].time.tv_sec,
-                                  l->log[i].time.tv_nsec,
-                                  memlog_event_desc(l->log[i].event_id));
-*/
-        printf("%0.11lld [%s]", t, 
-                                  memlog_event_desc(l->log[i].event_id));
-        printf("%s", (t < t_prev) ? " *not monotonic\n" : "\n");
-        t_prev = t;
+        if (l->log[i].event_id > MEMLOG_E_NONE) {
+            t = time_in_ns(l->log[i].time);
+            //Use llx, or else 64 bit number overflows printf vargs
+    /*
+            printf("%0.11d.%0.9d [%s]\n", l->log[i].time.tv_sec,
+                                      l->log[i].time.tv_nsec,
+                                      memlog_event_desc(l->log[i].event_id));
+    */
+            printf("%0.11lld [%s]", t,
+                                      memlog_event_desc(l->log[i].event_id));
+            printf("%s", (t < t_prev) ? " *not monotonic\n" : "\n");
+            t_prev = t;
+        }
+    }
+}
+
+void memlog_gnuplot_dump(memlog_t* l) {
+    uint64_t t = 0;
+
+    for (int i=0; i < MEMLOG_MAX; i++) {
+        if (l->log[i].event_id > MEMLOG_E_NONE) {
+            t = time_in_ns(l->log[i].time);
+            printf("%0.11lld %d\n", t, l->log[i].event_id);
+        }
     }
 }
 
