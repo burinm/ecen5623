@@ -29,8 +29,9 @@
 #define T2 50000
 
 //Tested in fibtest
-#define C1 800000
-#define C2 1700000
+#define C1 800000 //~10ms
+//#define C2 1700000
+#define C2 800000 //~10ms
 
 
 
@@ -80,7 +81,7 @@
     static struct timespec sleep_time = {0, 0};
     #define taskDelay(d) sleep_time.tv_sec=0; \
                          sleep_time.tv_nsec=(d * 1000); \
-                         nanosleep(CLOCK_REALTIME, &remaining_time); \
+                         nanosleep(&sleep_time, &remaining_time); \
 
     /* log */
     #include <syslog.h>
@@ -222,8 +223,8 @@ void *Sequencer(void* v)
 
   /* Sequencing loop for LCM phasing of S1, S2
    */
-  //int iters = 250;
-  int iters = 100000;
+  int iters = 10;
+  //int iters = 100000;
   while(!abortTest && iters)
   {
 
