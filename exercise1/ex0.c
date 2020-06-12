@@ -29,6 +29,7 @@
 #define T2 50000
 
 //Tested in fibtest
+//Both set to 10ms, because that' the minimum timeslice we are working with
 #define C1 800000 //~10ms
 //#define C2 1700000
 #define C2 800000 //~10ms
@@ -81,7 +82,7 @@
     static struct timespec sleep_time = {0, 0};
     #define taskDelay(d) sleep_time.tv_sec=0; \
                          sleep_time.tv_nsec=(d * 1000); \
-                         nanosleep(&sleep_time, &remaining_time); \
+                         nanosleep(&sleep_time, &remaining_time);
 
     /* log */
     #include <syslog.h>
@@ -98,6 +99,7 @@
 //3 logs to rule them all
 memlog_t* S1_LOG;
 memlog_t* S2_LOG;
+memlog_t* SEQ_LOG;
 
 
 #define FIB_LIMIT_FOR_32_BIT 47
@@ -188,7 +190,7 @@ void *Sequencer(void* v)
 #endif
 {
 
-  printf("Starting Sequencer\n");
+  printf("# Starting Sequencer\n");
 
   /* Just to be sure we have 1 msec tick and TOs */
   clockInit(1000);
@@ -199,14 +201,14 @@ void *Sequencer(void* v)
  
   if(taskSpawn(fibS1, 21))
   {
-    printf("S1 task spawned\n");
+    printf("# S1 task spawned\n");
   }
   else
     printf("S1 task spawn failed\n");
 
   if(taskSpawn(fibS2, 22))
   {
-    printf("S2 task spawned\n");
+    printf("# S2 task spawned\n");
   }
   else
     printf("S2 task spawn failed\n");
@@ -223,7 +225,7 @@ void *Sequencer(void* v)
 
   /* Sequencing loop for LCM phasing of S1, S2
    */
-  int iters = 10;
+  int iters = 5;
   //int iters = 100000;
   while(!abortTest && iters)
   {
@@ -241,16 +243,27 @@ void *Sequencer(void* v)
         <----------------D2><----------------D2>
     */
 
+
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         //Start with delay, (looped from end of schedule)
         taskDelay(T_UNIT); semGive(semS1);          // 0-1
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT); semGive(semS2);          // 1-2
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT); semGive(semS1);          // 2-3
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT); semGive(semS2);          // 3-4
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT); semGive(semS1);          // 4-5
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT); semGive(semS2);          // 5-6
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT); semGive(semS1);          // 6-7
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT); semGive(semS2);          // 7-8
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT); semGive(semS1);          // 8-9
+MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT);                          // 9-0
 
 
@@ -306,12 +319,13 @@ int main()
     //quick logging facility for timing
     S1_LOG = memlog_init();
     S2_LOG = memlog_init();
+    SEQ_LOG = memlog_init();
 
 	abortTest=0;
 
 	if(taskSpawn(Sequencer, 20))
 	{
-	  printf("Sequencer task spawned\n");
+	  printf("# Sequencer task spawned\n");
 	}
 	else
 	  printf("Sequencer task spawn failed\n");
@@ -325,14 +339,16 @@ pthread_join(thread_Sequencer, NULL);
 //closelog();
 #endif
 
-printf("fib1Cnt=%d, fib2Cnt=%d\n", fib1Cnt, fib2Cnt);
+printf("# fib1Cnt=%d, fib2Cnt=%d\n", fib1Cnt, fib2Cnt);
 //memlog_dump(S1_LOG);
 //memlog_dump(S2_LOG);
 memlog_gnuplot_dump(S1_LOG);
 memlog_gnuplot_dump(S2_LOG);
+memlog_gnuplot_dump(SEQ_LOG);
 
 memlog_free(S1_LOG);
 memlog_free(S2_LOG);
+memlog_free(SEQ_LOG);
 }
 
 #ifdef VXWORKS

@@ -90,6 +90,10 @@ char* memlog_event_desc(uint32_t e) {
             return "MEMLOG_E_S3_RUN";
             break;
 
+        case MEMLOG_E_SEQUENCER:
+            return "SEQUENCER_MARK";
+            break;
+
         case MEMLOG_E_FIB_TEST:
             return "FIBTEST_MARK";
             break;
