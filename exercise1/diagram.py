@@ -20,6 +20,8 @@ first_timestamp = None
 last_timestamp = None
 last_service = None
 
+first_entry = True
+
 for l in data_file:
     l = l.strip();
     if l[:1] == '#':
@@ -29,25 +31,26 @@ for l in data_file:
         if len(values) == 2:
             (timestamp, service) = values
 
-            # Timestamps are in ns, convert to ms
-            timestamp = int((int(timestamp) / 1000000))
+            # Timestamps are in ns, convert to usec 
+            timestamp = int((int(timestamp) / 1000))
+
+            if first_entry is True:
+               relative_offset = timestamp
+               print("{0}".format(service), end = ' ')
+               print(0, end = '\n')
+               first_entry = False
+               continue
 
 # absolute
-#            if first_timestamp == None:
-#                first_timestamp = timestamp
-#            else:
-#                print(timestamp - first_timestamp, end = '\n')
-#
-#            print("{0}".format(service), end = ' ')
+            current_timestamp = timestamp - relative_offset
 
-            if last_timestamp != None:
-                print(timestamp - last_timestamp, end = '\n')
-
-            #if last_service != service:
-            #    print("S{0}".format(service), end = ' ')
-            print("S{0}".format(service), end = ' ')
-
-            
+            # This point completes each vertical line (transistion) on the timing plot
+            if last_service != None:
+                print("{0}".format(last_service), end = ' ')
+                print(current_timestamp, end = '\n')
+                
+            print("{0}".format(service), end = ' ')
+            print(current_timestamp, end = '\n')
 
             last_service = service
             last_timestamp = timestamp
