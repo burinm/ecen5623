@@ -38,7 +38,7 @@ for l in data_file:
             if last_timestamp != None:
                 print(timestamp - last_timestamp, end = '\n')
 
-            if last_service != service:
+            if last_service == None:
                 print("S{0}".format(service), end = ' ')
             print("S{0}".format(service), end = ' ')
 
