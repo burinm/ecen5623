@@ -4,6 +4,7 @@
 /* Sam Siewert - 02/05/2011                                                 */
 /*                                                                          */
 /****************************************************************************/
+#define _GNU_SOURCE
 
 #include <pthread.h>
 #include <unistd.h>
@@ -12,11 +13,15 @@
 #include <time.h>
 #include <errno.h>
 
+#include <sched.h>
+
+#define RUN_RT_THREAD
+#define USE_AFFINITY
+
 #define NSEC_PER_SEC (1000000000)
 #define DELAY_TICKS (1)
 #define ERROR (-1)
 #define OK (0)
-#define TEST_SECONDS (1)
 
 void end_delay_test(void);
 
@@ -55,49 +60,30 @@ void print_scheduler(void)
 }
 
 
-double d_ftime(struct timespec *fstart, struct timespec *fstop)
-{
-  double dfstart = ((double)(fstart->tv_sec) + ((double)(fstart->tv_nsec) / 1000000000.0));
-  double dfstop = ((double)(fstop->tv_sec) + ((double)(fstop->tv_nsec) / 1000000000.0));
-
-  return(dfstop - dfstart); 
-}
-
-
 int delta_t(struct timespec *stop, struct timespec *start, struct timespec *delta_t)
 {
   int dt_sec=stop->tv_sec - start->tv_sec;
   int dt_nsec=stop->tv_nsec - start->tv_nsec;
 
-  // case 1 - less than a second of change
-  if(dt_sec == 0)
+  if (dt_sec < 0)
   {
-	  if(dt_nsec >= 0)
-	  {
-		  delta_t->tv_sec = 0;
-		  delta_t->tv_nsec = dt_nsec;
-	  }
-
-	  else // dt_nsec < 0 means stop is earlier than start
-	  {
-		 return(ERROR);  
-	  }
+    return (ERROR);
   }
 
-  // case 2 - more than a second of change, check for roll-over
-  else if(dt_sec > 0)
+  if (dt_sec == 0 && dt_nsec < 0)
   {
-	  if(dt_nsec >= 0)
-	  {
-		  delta_t->tv_sec = dt_sec;
-		  delta_t->tv_nsec = dt_nsec;
-	  }
+    return (ERROR);
+  }
 
-	  else // dt_nsec < 0 means roll over
-	  {
-		  delta_t->tv_sec = dt_sec-1;
-		  delta_t->tv_nsec = NSEC_PER_SEC - dt_nsec;
-	  }
+  if(dt_nsec >= 0)
+  {
+    delta_t->tv_sec=dt_sec;
+    delta_t->tv_nsec=dt_nsec;
+  }
+  else
+  {
+    delta_t->tv_sec=dt_sec-1;
+    delta_t->tv_nsec=NSEC_PER_SEC - dt_nsec;
   }
 
   return(OK);
@@ -127,8 +113,8 @@ void *delay_test(void *threadID)
       printf("\n\nPOSIX Clock demo using system RT clock with resolution:\n\t%ld secs, %ld microsecs, %ld nanosecs\n", rtclk_resolution.tv_sec, (rtclk_resolution.tv_nsec/1000), rtclk_resolution.tv_nsec);
   }
 
-  /* run test for defined seconds */
-  sleep_time.tv_sec=TEST_SECONDS;
+  /* run test for 3 seconds */
+  sleep_time.tv_sec=3;
   sleep_time.tv_nsec=0;
   sleep_requested.tv_sec=sleep_time.tv_sec;
   sleep_requested.tv_nsec=sleep_time.tv_nsec;
@@ -140,6 +126,7 @@ void *delay_test(void *threadID)
   do 
   {
       nanosleep(&sleep_time, &remaining_time);
+   clock_gettime(CLOCK_REALTIME, &rtclk_stop_time); //Put as close as possible to end of nanosleep
          
       sleep_time.tv_sec = remaining_time.tv_sec;
       sleep_time.tv_nsec = remaining_time.tv_nsec;
@@ -147,7 +134,6 @@ void *delay_test(void *threadID)
   } 
   while (((remaining_time.tv_sec > 0) || (remaining_time.tv_nsec > 0)) && (sleep_count < max_sleep_calls));
 
-  clock_gettime(CLOCK_REALTIME, &rtclk_stop_time);
 
   delta_t(&rtclk_stop_time, &rtclk_start_time, &rtclk_dt);
   delta_t(&rtclk_dt, &sleep_requested, &delay_error);
@@ -180,11 +166,49 @@ void end_delay_test(void)
 
 }
 
-//#define RUN_RT_THREAD
 
 void main(void)
 {
    int rc, scope;
+
+#ifdef USE_AFFINITY
+    #define CPU_NUM   3
+    #define CURRENT_PID  0
+
+    printf("Set CPU affinity to CPU %d\n", CPU_NUM);
+    cpu_set_t cpu_set;
+    CPU_ZERO(&cpu_set);
+    CPU_SET(CPU_NUM, &cpu_set);
+
+    if (sched_setaffinity(CURRENT_PID, sizeof(cpu_set), &cpu_set) != 0) {
+       printf("ERROR; sched_setaffinity rc is %d\n", rc);
+       perror("sched_setaffinity"); exit(-1);
+    }
+
+    //Trust but verify
+    cpu_set_t get_cpu_set;
+    if (sched_getaffinity(CURRENT_PID, sizeof(get_cpu_set), &get_cpu_set) != 0) {
+       printf("ERROR; sched_getaffinity rc is %d\n", rc);
+       perror("sched_getaffinity"); exit(-1);
+    }
+
+    if (!CPU_EQUAL(&cpu_set, &get_cpu_set)) {
+        printf("ERROR; CPU affinity not set\n");
+        exit(-1);
+    }
+
+    int current_cpu = sched_getcpu();
+    if (current_cpu == -1) {
+       printf("ERROR; sched_getcpu rc is %d\n", rc);
+       perror("sched_getcpu"); exit(-1);
+    }
+
+    if (current_cpu != CPU_NUM) {
+        printf("ERROR; Process not running on CPU %d (using p:%d)\n", CPU_NUM, current_cpu);
+        exit(-1);
+    }
+
+#endif
 
    printf("Before adjustments to scheduling policy:\n");
    print_scheduler();
