@@ -1,0 +1,7 @@
+$ make
+$ ./rm_plot > a.dat
+
+$ gnuplot --persist  -e "set xlabel \"tasks\"" \
+                   -e "set ylabel \"% CPU\"" \
+                   -e "set title \"Rate Monotonic - 1 - 100 tasks\"" \
+                   -e "plot 'a.dat'  with lines"
