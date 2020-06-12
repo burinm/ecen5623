@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# timediff.py - burin (c) 2020
+#   Output events and relative time deltas from timestamp file   
+
 import sys
 
 if len(sys.argv) != 2:

@@ -1,3 +1,6 @@
+/* fibtest.c - burin (c) 2020, seiwert 2005
+    Test load timing test for fibonacci sequence
+*/ 
 #include <stdint.h>
 #include "memlog.h"
 

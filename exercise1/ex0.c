@@ -16,15 +16,24 @@
 /*
 /****************************************************************************/
 
-/* burin - Exercise 1, part #4
+/*
+    Sam Siewert - 2005
+
+    burin (c) spring 2020 -  modified/ported from
+      http://ecee.colorado.edu/~ecen5623/ecen/ex/Linux/code/VxWorks-sequencers/ex0.c
+
+    Exercise 1, part #4 - ecen5623 - spring 2020
 
     S1: T1 = 2 C1 = 1
     S2: T2 = 5 C2 = 2
 
     Utotal = 90%, LUB = 82.8%
+
+    All times are usec
 */
 
 #define T_UNIT  10000
+//TODO - These deadlines are not yet checked
 #define T1 20000
 #define T2 50000
 
@@ -33,10 +42,6 @@
 #define C1 800000 //~10ms
 //#define C2 1700000
 #define C2 800000 //~10ms
-
-
-
-
 
 #ifdef VXWORKS
     #include "vxWorks.h"
@@ -84,7 +89,7 @@
                          sleep_time.tv_nsec=(d * 1000); \
                          nanosleep(&sleep_time, &remaining_time);
 
-    /* log */
+    /* log - currently not being used */
     #include <syslog.h>
     #define LOG(id, buffer) syslog(LOG_INFO, "%s", buffer)
 
@@ -150,7 +155,6 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
 
    while(!abortTest)
    {
-//MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_SCHEDULED);
 	   semTake(semS1);
 MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_RUN);
 	   FIB_TEST(seqIterations, C1, idx, jdx, fib, fib0, fib1);
@@ -169,7 +173,6 @@ UINT32 fib = 0, fib0 = 0, fib1 = 1;
 
    while(!abortTest)
    {
-//MEMLOG_LOG(S2_LOG, MEMLOG_E_S2_SCHEDULED);
 	   semTake(semS2);
 MEMLOG_LOG(S2_LOG, MEMLOG_E_S2_RUN);
 	   FIB_TEST(seqIterations, C2, idx, jdx, fib, fib0, fib1);
@@ -214,14 +217,14 @@ void *Sequencer(void* v)
     printf("S2 task spawn failed\n");
 
 
+#ifdef VXWORKS
   /* Simulate the C.I. for S1 and S2 and mark on windview and log
      wvEvent first because F10 and F20 can preempt this task!
    */
-  //LOG(0xC, ciMarker);
+  LOG(0xC, ciMarker);
 
-  //Can't trust that pthreads will start in order!
-  //semGive(semS1); semGive(semS2);
-
+  semGive(semS1); semGive(semS2);
+#endif
 
   /* Sequencing loop for LCM phasing of S1, S2
    */
@@ -266,33 +269,11 @@ MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
 MEMLOG_LOG(SEQ_LOG, MEMLOG_E_SEQUENCER);
         taskDelay(T_UNIT);                          // 9-0
 
-
-#if 0
-	  /* Basic sequence of releases after CI */
-      taskDelay(2); semGive(semS1);                 /* +2  */
-      taskDelay(2); semGive(semS1);                 /* +4  */
-      taskDelay(2); semGive(semS1);                 /* +6  */
-      taskDelay(2); semGive(semS1);                 /* +8  */
-      taskDelay(2); semGive(semS1); semGive(semS2); /* +10 */
-      taskDelay(2); semGive(semS1);                 /* +12 */
-      taskDelay(2); semGive(semS1);                 /* +14 */
-      taskDelay(1); semGive(semS3);                 /* +15 */
-
-      taskDelay(2); semGive(semS1);                 /* +17 */
-      taskDelay(2); semGive(semS1);                 /* +19 */
-	  taskDelay(1); semGive(semS2);                 /* +20 */
-      taskDelay(2); semGive(semS1);                 /* +22 */
-      taskDelay(2); semGive(semS1);                 /* +24 */
-      taskDelay(2); semGive(semS1);                 /* +26 */
-      taskDelay(2); semGive(semS1);                 /* +28 */
-      taskDelay(2);                                 /* +30 */
-
+#ifdef VXWORKS
 	  /* back to C.I. conditions, log event first due to preemption */
-      //LOG(0xC, ciMarker);
+      LOG(0xC, ciMarker);
+	  semGive(semS1); semGive(semS2); //Why?, was this for vxWorks logging anomaly ??
 #endif
-
-        //Why?, was this for vxWorks logging ??
-	  //semGive(semS1); semGive(semS2);
 
       iters--;
   }  
@@ -312,8 +293,6 @@ int main()
     struct sigaction action;
     action.sa_handler = ctrl_c;
     sigaction(SIGINT, &action, NULL);
-    //from https://www.gnu.org/software/libc/manual/html_node/Syslog-Example.html
-    //openlog ("ex0", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL0);
 #endif
 
     //quick logging facility for timing
@@ -336,12 +315,11 @@ pthread_join(thread_fibS1, NULL);
 pthread_join(thread_fibS2, NULL);
 pthread_join(thread_Sequencer, NULL);
 
-//closelog();
 #endif
 
 printf("# fib1Cnt=%d, fib2Cnt=%d\n", fib1Cnt, fib2Cnt);
-//memlog_dump(S1_LOG);
-//memlog_dump(S2_LOG);
+
+//Dump all logs, sort outside program by column 1, timestamp
 memlog_gnuplot_dump(S1_LOG);
 memlog_gnuplot_dump(S2_LOG);
 memlog_gnuplot_dump(SEQ_LOG);

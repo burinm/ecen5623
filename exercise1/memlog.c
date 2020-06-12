@@ -1,3 +1,5 @@
+/* memlog.c - burin (c) 2020
+*/
 #include <stdlib.h> //calloc, free
 #include <stdio.h>
 #include <assert.h>

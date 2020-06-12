@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# digram.py - burin (c) 2020
+#   Output datapoints for a GNUplot graph from timing data
+
 import sys
 
 if len(sys.argv) != 2:
