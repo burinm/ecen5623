@@ -1,21 +1,3 @@
-/****************************************************************************/
-/*                                                                          */
-/* Sam Siewert - 2005                                                       */ 
-/*		                                                                    */
-/* Example #0                                                               */
-/*
-/* LCM = 30
-/*
-/* S1: T1=2,  C1=1, U1=0.5
-/* S2: T2=10, C2=1, U2=0.1 
-/* S3: T3=15, C3=2, U3=0.13333
-/*
-/* Utotal = 0.73333, RM LUB = 3x(2^1/3-1)=0.78
-/*
-/* All times are milliseconds
-/*
-/****************************************************************************/
-
 /*
     Sam Siewert - 2005
 
@@ -64,6 +46,7 @@
     #define LOG(id, buffer) (if(wvEvent(id, buffer, sizeof(buffer)) == ERROR) \
 		                        printf("WV EVENT ERROR\n"))
 #else
+    #define _GNU_SOURCE
     #include <stdio.h>
 
     /* Semaphores */
@@ -96,6 +79,12 @@
     /* catch signal */
     #include <signal.h>
     void ctrl_c(int addr);
+
+    #define USE_AFFINITY
+
+    #ifdef USE_AFFINITY
+        #include <sched.h>
+    #endif
 
 #endif
 
@@ -311,6 +300,49 @@ int main()
 
 #ifdef VXWORKS
 #else
+
+#ifdef USE_AFFINITY
+    #define CPU_NUM   3
+    #define CURRENT_PID  0
+    #include <stdlib.h> //exit
+
+    int rc;
+
+    printf("# Set CPU affinity to CPU %d\n", CPU_NUM);
+    cpu_set_t cpu_set;
+    CPU_ZERO(&cpu_set);
+    CPU_SET(CPU_NUM, &cpu_set);
+
+    if (sched_setaffinity(CURRENT_PID, sizeof(cpu_set), &cpu_set) != 0) {
+       printf("ERROR; sched_setaffinity rc is %d\n", rc);
+       perror("sched_setaffinity"); exit(-1);
+    }
+
+    //Trust but verify
+    cpu_set_t get_cpu_set;
+    if (sched_getaffinity(CURRENT_PID, sizeof(get_cpu_set), &get_cpu_set) != 0) {
+       printf("ERROR; sched_getaffinity rc is %d\n", rc);
+       perror("sched_getaffinity"); exit(-1);
+    }
+
+    if (!CPU_EQUAL(&cpu_set, &get_cpu_set)) {
+        printf("ERROR; CPU affinity not set\n");
+        exit(-1);
+    }
+
+    int current_cpu = sched_getcpu();
+    if (current_cpu == -1) {
+       printf("ERROR; sched_getcpu rc is %d\n", rc);
+       perror("sched_getcpu"); exit(-1);
+    }
+
+    if (current_cpu != CPU_NUM) {
+        printf("ERROR; Process not running on CPU %d (using p:%d)\n", CPU_NUM, current_cpu);
+        exit(-1);
+    }
+
+#endif
+
 pthread_join(thread_fibS1, NULL);
 pthread_join(thread_fibS2, NULL);
 pthread_join(thread_Sequencer, NULL);
