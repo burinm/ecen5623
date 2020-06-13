@@ -62,7 +62,22 @@
     pthread_t thread_fibS1, thread_fibS2, thread_Sequencer;
     typedef struct { int threadIdx; } threadParams_t; //from example simplethread.c code
     threadParams_t threadParam_fibS1, threadParam_fibS2, threadParam_Sequencer;
-    #define taskSpawn(t, pri) (pthread_create(&thread_ ## t, (void *)0, &t, (void*)&threadParam_ ## t ) == 0)
+    
+    //#define RUN_RT_THREAD
+
+    #ifdef RUN_RT_THREAD
+        #include <sys/types.h>
+        #include <unistd.h>
+
+        //This whole part taken from posix_clock example
+        int rt_max_prio, rt_min_prio;
+        pthread_attr_t sched_attr_fibS1, sched_attr_fibS2, sched_attr_Sequencer;
+        struct sched_param main_param;
+        pthread_attr_t main_sched_attr;
+        #define taskSpawn(t, pri) (pthread_create(&thread_ ## t, &sched_attr_ ## t, &t, (void*)&threadParam_ ## t ) == 0)
+    #else
+        #define taskSpawn(t, pri) (pthread_create(&thread_ ## t, (void *)0, &t, (void*)&threadParam_ ## t ) == 0)
+    #endif
 
     /* task delay */
     #define clockInit(c) //Do nothing
@@ -80,7 +95,7 @@
     #include <signal.h>
     void ctrl_c(int addr);
 
-    #define USE_AFFINITY
+    //#define USE_AFFINITY
 
     #ifdef USE_AFFINITY
         #include <sched.h>
@@ -191,12 +206,14 @@ void *Sequencer(void* v)
   semInit(semS1);
   semInit(semS2);
  
+
   if(taskSpawn(fibS1, 21))
   {
     printf("# S1 task spawned\n");
   }
   else
     printf("S1 task spawn failed\n");
+
 
   if(taskSpawn(fibS2, 22))
   {
@@ -341,11 +358,44 @@ int main()
         exit(-1);
     }
 
+#ifdef RUN_RT_THREAD
+   //Taken directly from posix_clock.c example
+   pthread_attr_init(&main_sched_attr);
+   pthread_attr_setinheritsched(&main_sched_attr, PTHREAD_EXPLICIT_SCHED);
+   pthread_attr_setschedpolicy(&main_sched_attr, SCHED_FIFO);
+
+   rt_max_prio = sched_get_priority_max(SCHED_FIFO);
+   rt_min_prio = sched_get_priority_min(SCHED_FIFO);
+
+   main_param.sched_priority = rt_max_prio;
+   rc=sched_setscheduler(getpid(), SCHED_FIFO, &main_param);
+
+
+   if (rc)
+   {
+       printf("ERROR; sched_setscheduler rc is %d\n", rc);
+       perror("sched_setschduler"); exit(-1);
+   } else {
+       printf("# FIFO scheduling enabled\n");
+   }
+      
+
+   main_param.sched_priority = rt_max_prio;
+   pthread_attr_setschedparam(&main_sched_attr, &main_param);
+
+#endif
+
 #endif
 
 pthread_join(thread_fibS1, NULL);
 pthread_join(thread_fibS2, NULL);
 pthread_join(thread_Sequencer, NULL);
+
+#ifdef RUN_RT_THREAD //from posix_clock.c 
+if(pthread_attr_destroy(&main_sched_attr) != 0)
+     perror("attr destroy");
+#endif
+
 
 #endif
 
