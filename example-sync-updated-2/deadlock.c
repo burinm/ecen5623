@@ -23,10 +23,8 @@ threadParams_t threadParams[NUM_THREADS];
 
 struct sched_param nrt_param;
 
-//pthread_mutex_t rsrcA, rsrcB;
-pthread_mutex_t rsrcA, rsrcB;
-//pthread_mutex_t rsrcA = PTHREAD_MUTEX_INITIALIZER; 
-//pthread_mutex_t rsrcB = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t rsrcA = PTHREAD_MUTEX_INITIALIZER; 
+pthread_mutex_t rsrcB = PTHREAD_MUTEX_INITIALIZER;
 
 volatile int rsrcACnt=0, rsrcBCnt=0, noWait=0;
 
@@ -91,19 +89,6 @@ int main (int argc, char *argv[])
    {
      printf("Usage: deadlock [safe|race|unsafe]\n");
    }
-
-#if 1
-   // Set default protocol for mutex
-   if (pthread_mutex_init(&rsrcA, NULL) !=0) {
-    perror("");;
-    exit(-1);
-   }
-
-   if (pthread_mutex_init(&rsrcB, NULL) !=0) {
-    perror("");;
-    exit(-1);
-   }
-#endif
 
 
    printf("Creating thread %d\n", THREAD_1);
