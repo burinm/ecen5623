@@ -3,6 +3,10 @@
 #include <sched.h>
 #include <time.h>
 #include <stdlib.h>
+#include <sys/types.h> //getpid
+#include <unistd.h> //getpid
+#include <string.h> //strncmp
+
 
 #define NUM_THREADS 2
 #define THREAD_1 1

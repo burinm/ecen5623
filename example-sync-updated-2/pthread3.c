@@ -16,6 +16,10 @@
 #include <sched.h>
 #include <time.h>
 #include <stdlib.h>
+#include <sys/types.h> //getpid
+#include <unistd.h> //getpid
+#include <sys/time.h> //gettimeofday
+
 
 #define NUM_THREADS		4
 #define START_SERVICE 		0
@@ -50,7 +54,8 @@ volatile unsigned idleCount[NUM_THREADS];
 int intfTime=0;
 
 int numberOfProcessors;
-struct timespec timeNow, timeStartTest;
+struct timeval timeNow;
+struct timeval timeStartTest;
 
 unsigned const int fibLength = 47;  // if number is too large, unsigned will overflow
 unsigned const int fibComputeSequences = 100000;   // to add more time, increase iterations
@@ -58,7 +63,7 @@ unsigned const int fibComputeSequences = 100000;   // to add more time, increase
 // Helper functions
 void fibCycleBurner(unsigned seqCnt, unsigned iterCnt, int traceOn);
 void *startService(void *threadid);
-double dTime(struct timespec now, struct timespec start);
+double dTime(struct timeval now, struct timeval start);
 void print_scheduler(void);
 
 // function entry points for 2 tasks used in this demonstration
@@ -290,12 +295,12 @@ void *startService(void *threadid)
 }
 
 
-double dTime(struct timespec now, struct timespec start)
+double dTime(struct timeval now, struct timeval start)
 {
     double nowReal=0.0, startReal=0.0;
 
-    nowReal = (double)now.tv_sec + ((double)now.tv_nsec / 1000000000.0);
-    startReal = (double)start.tv_sec + ((double)start.tv_nsec / 1000000000.0);
+    nowReal = (double)now.tv_sec + ((double)now.tv_usec / 1000000.0);
+    startReal = (double)start.tv_sec + ((double)start.tv_usec / 1000000.0);
 
     return (nowReal-startReal);
 }
@@ -351,7 +356,7 @@ void print_scheduler(void)
 
 void *simpleTask(void *threadp)
 {
-  struct timespec timeNow;
+  struct timeval timeNow;
   pthread_t thread;
   cpu_set_t cpuset;
   threadParams_t *threadParams = (threadParams_t *)threadp;
@@ -388,7 +393,7 @@ void *simpleTask(void *threadp)
 
 void *criticalSectionTask(void *threadp)
 {
-  struct timespec timeNow;
+  struct timeval timeNow;
   pthread_t thread;
   threadParams_t *threadParams = (threadParams_t *)threadp;
   int idleIdx = threadParams->threadIdx, cpucore;
