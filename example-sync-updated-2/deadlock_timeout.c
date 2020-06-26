@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <sched.h>
@@ -36,6 +37,9 @@ int rsrcCnts[NUM_THREADS] = {0};
 
 int noWait=0;
 
+uint16_t rng16();
+
+uint16_t backoff = 1; //start with 1 second
 
 void *grabRsrcs(void *threadp)
 {
@@ -52,14 +56,16 @@ void *grabRsrcs(void *threadp)
 
    clock_gettime(CLOCK_REALTIME, &timeNow);
 
-   rsrc1_timeout.tv_sec = timeNow.tv_sec + 2;
-   rsrc1_timeout.tv_nsec = timeNow.tv_nsec;
-   rsrc2_timeout.tv_sec = timeNow.tv_sec + 3;
-   rsrc2_timeout.tv_nsec = timeNow.tv_nsec;
+   //rsrc1_timeout.tv_sec = timeNow.tv_sec + 2;
+   //rsrc1_timeout.tv_nsec = timeNow.tv_nsec;
+   //rsrc2_timeout.tv_sec = timeNow.tv_sec + 3;
+   //rsrc2_timeout.tv_nsec = timeNow.tv_nsec;
 
 
 assert(threadIdx == THREAD_1 || threadIdx == THREAD_2);
 
+   int got_one = 0;
+   int got_two = 0;
 
    pthread_mutex_t *resource_to_aquire_one;
    pthread_mutex_t *resource_to_aquire_two;
@@ -83,13 +89,25 @@ assert(threadIdx == THREAD_1 || threadIdx == THREAD_2);
 assert(resource_one_id != -1);
 assert(resource_two_id != -1);
 
+    while(1) { //keep trying indefinitely to aquire both resources
+
      printf("THREAD %d grabbing resource %p @ %d sec and %d nsec\n", threadIdx, resource_to_aquire_one,
                                                             (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
-     //if((rc=pthread_mutex_timedlock(&rsrcA, &rsrcA_timeout)) != 0)
-     if((rc=pthread_mutex_lock(resource_to_aquire_one)) != 0)
+     printf("Thread %d backoff.. %ds\n", threadIdx, backoff);
+
+     clock_gettime(CLOCK_REALTIME, &timeNow);
+     rsrc1_timeout.tv_sec = timeNow.tv_sec + backoff;
+     rsrc1_timeout.tv_nsec = timeNow.tv_nsec;
+     backoff *= 2;
+
+     if((rc=pthread_mutex_timedlock(resource_to_aquire_one, &rsrc1_timeout)) != 0)
      {
          printf("Thread %d ERROR\n", threadIdx);
          pthread_exit(NULL);
+     }
+     else if(rc == ETIMEDOUT)
+     {
+         printf("Thread %d aquiring %p TIMEOUT\n", threadIdx, resource_to_aquire_one);
      }
      else
      {
@@ -97,14 +115,24 @@ assert(resource_two_id != -1);
          rsrcCnts[resource_one_id]++;
          printf("resource A (%p) count=%d, resource B (%p) count=%d\n", &rsrcA, rsrcCnts[RESOURCE_A_ID],
                                                                         &rsrcB, rsrcCnts[RESOURCE_B_ID]);
+        got_one = 1;
      }
+
+    if (got_one && got_two) {
+        break;
+    }
 
      // if unsafe test, immediately try to acquire resource two 
      if(!noWait) usleep(1000000);
 
+     //uint16_t random_number = backoff();
+     //printf("backoff.. %dns", random_number);
+     printf("Thread %d backoff.. %ds\n", threadIdx, backoff);
+
      clock_gettime(CLOCK_REALTIME, &timeNow);
-     rsrc2_timeout.tv_sec = timeNow.tv_sec + 3;
+     rsrc2_timeout.tv_sec = timeNow.tv_sec + backoff;
      rsrc2_timeout.tv_nsec = timeNow.tv_nsec;
+     backoff *= 2;
 
      printf("THREAD %d got %p, trying for %p @ %d sec and %d nsec\n",  threadIdx, resource_to_aquire_one,
                                                             resource_to_aquire_two,
@@ -120,13 +148,14 @@ assert(resource_two_id != -1);
          rsrcCnts[resource_two_id]++;
          printf("resource A (%p) count=%d, resource B (%p) count=%d\n", &rsrcA, rsrcCnts[RESOURCE_A_ID],
                                                                         &rsrcB, rsrcCnts[RESOURCE_B_ID]);
+        got_two = 1;
      }
      else if(rc == ETIMEDOUT)
      {
          printf("Thread %d TIMEOUT ERROR\n", threadIdx);
          rsrcCnts[resource_one_id]--;
          pthread_mutex_unlock(resource_to_aquire_one);
-         pthread_exit(NULL);
+         continue;
      }
      else
      {
@@ -135,6 +164,12 @@ assert(resource_two_id != -1);
          pthread_mutex_unlock(resource_to_aquire_one);
          pthread_exit(NULL);
      }
+
+     if (got_one && got_two) {
+         break;
+     }
+
+    }
 
      printf("THREAD %d got %p and %p\n", threadIdx, resource_to_aquire_one, resource_to_aquire_two);
      rsrcCnts[resource_two_id]--;
@@ -212,4 +247,17 @@ int main (int argc, char *argv[])
    printf("All done\n");
 
    exit(0);
+}
+
+static uint16_t random_number = 4;
+static struct timespec a_time;
+/* Psuedo RNG taken from my own code here:
+    https://github.com/burinm/softsynth/blob/master/wave_function.c
+*/
+uint16_t rng16() {
+    random_number= (uint16_t)( 74 *random_number) % (uint16_t)32771;
+    a_time.tv_sec = 0;
+    a_time.tv_nsec = random_number;
+
+    return random_number;
 }
