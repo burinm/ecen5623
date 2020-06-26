@@ -26,7 +26,11 @@ struct sched_param nrt_param;
 pthread_mutex_t rsrcA = PTHREAD_MUTEX_INITIALIZER; 
 pthread_mutex_t rsrcB = PTHREAD_MUTEX_INITIALIZER;
 
-volatile int rsrcACnt=0, rsrcBCnt=0, noWait=0;
+/*These do not need to be volatile, mutex is about seqential data access,
+   flags are not modified in an ISR - or ever for that matter
+*/
+int rsrcACnt=0, rsrcBCnt=0, noWait=0;
+
 
 
 void *grabRsrcs(void *threadp)

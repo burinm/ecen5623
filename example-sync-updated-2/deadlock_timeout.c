@@ -23,9 +23,13 @@ threadParams_t threadParams[NUM_THREADS];
 pthread_t threads[NUM_THREADS];
 struct sched_param nrt_param;
 
-pthread_mutex_t rsrcA, rsrcB;
+pthread_mutex_t rsrcA = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t rsrcB = PTHREAD_MUTEX_INITIALIZER;
 
-volatile int rsrcACnt=0, rsrcBCnt=0, noWait=0;
+/*These do not need to be volatile, mutex is about seqential data access,
+   flags are not modified in an ISR - or ever for that matter
+*/
+int rsrcACnt=0, rsrcBCnt=0, noWait=0;
 
 
 void *grabRsrcs(void *threadp)
@@ -187,10 +191,6 @@ int main (int argc, char *argv[])
    {
      printf("Usage: deadlock [safe|race|unsafe]\n");
    }
-
-   // Set default protocol for mutex which is unlocked to start
-   pthread_mutex_init(&rsrcA, NULL);
-   pthread_mutex_init(&rsrcB, NULL);
 
    printf("Creating thread %d\n", THREAD_1);
    threadParams[THREAD_1].threadIdx=THREAD_1;
