@@ -7,6 +7,7 @@
 #include <sys/types.h> //getpid
 #include <unistd.h> //getpid
 #include <string.h> //strncmp
+#include <assert.h>
 
 
 #define NUM_THREADS 2
@@ -29,14 +30,18 @@ pthread_mutex_t rsrcB = PTHREAD_MUTEX_INITIALIZER;
 /*These do not need to be volatile, mutex is about seqential data access,
    flags are not modified in an ISR - or ever for that matter
 */
-int rsrcACnt=0, rsrcBCnt=0, noWait=0;
+int rsrcCnts[NUM_THREADS] = {0};
+#define RESOURCE_A_ID   0
+#define RESOURCE_B_ID   1
+
+int noWait=0;
 
 
 void *grabRsrcs(void *threadp)
 {
    struct timespec timeNow;
-   struct timespec rsrcA_timeout;
-   struct timespec rsrcB_timeout;
+   struct timespec rsrc1_timeout;
+   struct timespec rsrc2_timeout;
    int rc;
    threadParams_t *threadParams = (threadParams_t *)threadp;
    int threadIdx = threadParams->threadIdx;
@@ -47,124 +52,97 @@ void *grabRsrcs(void *threadp)
 
    clock_gettime(CLOCK_REALTIME, &timeNow);
 
-   rsrcA_timeout.tv_sec = timeNow.tv_sec + 2;
-   rsrcA_timeout.tv_nsec = timeNow.tv_nsec;
-   rsrcB_timeout.tv_sec = timeNow.tv_sec + 3;
-   rsrcB_timeout.tv_nsec = timeNow.tv_nsec;
+   rsrc1_timeout.tv_sec = timeNow.tv_sec + 2;
+   rsrc1_timeout.tv_nsec = timeNow.tv_nsec;
+   rsrc2_timeout.tv_sec = timeNow.tv_sec + 3;
+   rsrc2_timeout.tv_nsec = timeNow.tv_nsec;
 
 
-   if(threadIdx == THREAD_1)
-   {
-     printf("THREAD 1 grabbing resource A @ %d sec and %d nsec\n", (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
+assert(threadIdx == THREAD_1 || threadIdx == THREAD_2);
+
+
+   pthread_mutex_t *resource_to_aquire_one;
+   pthread_mutex_t *resource_to_aquire_two;
+   int resource_one_id = -1;
+   int resource_two_id = -1;
+
+   if(threadIdx == THREAD_1) {
+        resource_to_aquire_one = &rsrcA;
+        resource_to_aquire_two = &rsrcB;
+        resource_one_id = RESOURCE_A_ID;
+        resource_two_id = RESOURCE_B_ID;
+   }
+
+   if(threadIdx == THREAD_2) {
+        resource_to_aquire_one = &rsrcB;
+        resource_to_aquire_two = &rsrcA;
+        resource_one_id = RESOURCE_B_ID;
+        resource_two_id = RESOURCE_A_ID;
+   }
+
+assert(resource_one_id != -1);
+assert(resource_two_id != -1);
+
+     printf("THREAD %d grabbing resource %p @ %d sec and %d nsec\n", threadIdx, resource_to_aquire_one,
+                                                            (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
      //if((rc=pthread_mutex_timedlock(&rsrcA, &rsrcA_timeout)) != 0)
-     if((rc=pthread_mutex_lock(&rsrcA)) != 0)
+     if((rc=pthread_mutex_lock(resource_to_aquire_one)) != 0)
      {
-         printf("Thread 1 ERROR\n");
+         printf("Thread %d ERROR\n", threadIdx);
          pthread_exit(NULL);
      }
      else
      {
-         printf("Thread 1 GOT A\n");
-         rsrcACnt++;
-         printf("rsrcACnt=%d, rsrcBCnt=%d\n", rsrcACnt, rsrcBCnt);
+         printf("Thread %d GOT %p\n", threadIdx, resource_to_aquire_one);
+         rsrcCnts[resource_one_id]++;
+         printf("resource A (%p) count=%d, resource B (%p) count=%d\n", &rsrcA, rsrcCnts[RESOURCE_A_ID],
+                                                                        &rsrcB, rsrcCnts[RESOURCE_B_ID]);
      }
 
-     // if unsafe test, immediately try to acquire rsrcB
+     // if unsafe test, immediately try to acquire resource two 
      if(!noWait) usleep(1000000);
 
      clock_gettime(CLOCK_REALTIME, &timeNow);
-     rsrcB_timeout.tv_sec = timeNow.tv_sec + 3;
-     rsrcB_timeout.tv_nsec = timeNow.tv_nsec;
+     rsrc2_timeout.tv_sec = timeNow.tv_sec + 3;
+     rsrc2_timeout.tv_nsec = timeNow.tv_nsec;
 
-     printf("THREAD 1 got A, trying for B @ %d sec and %d nsec\n", (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
+     printf("THREAD %d got %p, trying for %p @ %d sec and %d nsec\n",  threadIdx, resource_to_aquire_one,
+                                                            resource_to_aquire_two,
+                                                            (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
 
-     rc=pthread_mutex_timedlock(&rsrcB, &rsrcB_timeout);
+     rc=pthread_mutex_timedlock(resource_to_aquire_two, &rsrc2_timeout);
      //rc=pthread_mutex_lock(&rsrcB);
      if(rc == 0)
      {
          clock_gettime(CLOCK_REALTIME, &timeNow);
-         printf("Thread 1 GOT B @ %d sec and %d nsec with rc=%d\n", (int)timeNow.tv_sec, (int)timeNow.tv_nsec, rc);
-         rsrcBCnt++;
-         printf("rsrcACnt=%d, rsrcBCnt=%d\n", rsrcACnt, rsrcBCnt);
+         printf("Thread %d GOT %p @ %d sec and %d nsec with rc=%d\n", threadIdx, resource_to_aquire_two,
+                                                                    (int)timeNow.tv_sec, (int)timeNow.tv_nsec, rc);
+         rsrcCnts[resource_two_id]++;
+         printf("resource A (%p) count=%d, resource B (%p) count=%d\n", &rsrcA, rsrcCnts[RESOURCE_A_ID],
+                                                                        &rsrcB, rsrcCnts[RESOURCE_B_ID]);
      }
      else if(rc == ETIMEDOUT)
      {
-         printf("Thread 1 TIMEOUT ERROR\n");
-         rsrcACnt--;
-         pthread_mutex_unlock(&rsrcA);
+         printf("Thread %d TIMEOUT ERROR\n", threadIdx);
+         rsrcCnts[resource_one_id]--;
+         pthread_mutex_unlock(resource_to_aquire_one);
          pthread_exit(NULL);
      }
      else
      {
-         printf("Thread 1 ERROR\n");
-         rsrcACnt--;
-         pthread_mutex_unlock(&rsrcA);
+         printf("Thread %d ERROR\n", threadIdx);
+         rsrcCnts[resource_one_id]--;
+         pthread_mutex_unlock(resource_to_aquire_one);
          pthread_exit(NULL);
      }
 
-     printf("THREAD 1 got A and B\n");
-     rsrcBCnt--;
-     pthread_mutex_unlock(&rsrcB);
-     rsrcACnt--;
-     pthread_mutex_unlock(&rsrcA);
-     printf("THREAD 1 done\n");
-   }
+     printf("THREAD %d got %p and %p\n", threadIdx, resource_to_aquire_one, resource_to_aquire_two);
+     rsrcCnts[resource_two_id]--;
+     pthread_mutex_unlock(resource_to_aquire_two);
+     rsrcCnts[resource_one_id]--;
+     pthread_mutex_unlock(resource_to_aquire_one);
+     printf("THREAD %d done\n", threadIdx);
 
-   else
-   {
-     printf("THREAD 2 grabbing resource B @ %d sec and %d nsec\n", (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
-     //if((rc=pthread_mutex_timedlock(&rsrcB, &rsrcB_timeout)) != 0)
-     if((rc=pthread_mutex_lock(&rsrcB)) != 0)
-     {
-         printf("Thread 2 ERROR\n");
-         pthread_exit(NULL);
-     }
-     else
-     {
-         printf("Thread 2 GOT B\n");
-         rsrcBCnt++;
-         printf("rsrcACnt=%d, rsrcBCnt=%d\n", rsrcACnt, rsrcBCnt);
-     }
-
-     // if unsafe test, immediately try to acquire rsrcB
-     if(!noWait) usleep(1000000);
-
-     clock_gettime(CLOCK_REALTIME, &timeNow);
-     rsrcA_timeout.tv_sec = timeNow.tv_sec + 2;
-     rsrcA_timeout.tv_nsec = timeNow.tv_nsec;
-
-     printf("THREAD 2 got B, trying for A @ %d sec and %d nsec\n", (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
-     rc=pthread_mutex_timedlock(&rsrcA, &rsrcA_timeout);
-     //rc=pthread_mutex_lock(&rsrcA);
-     if(rc == 0)
-     {
-         clock_gettime(CLOCK_REALTIME, &timeNow);
-         printf("Thread 2 GOT A @ %d sec and %d nsec with rc=%d\n", (int)timeNow.tv_sec, (int)timeNow.tv_nsec, rc);
-         rsrcACnt++;
-         printf("rsrcACnt=%d, rsrcBCnt=%d\n", rsrcACnt, rsrcBCnt);
-     }
-     else if(rc == ETIMEDOUT)
-     {
-         printf("Thread 2 TIMEOUT ERROR\n");
-         rsrcBCnt--;
-         pthread_mutex_unlock(&rsrcB);
-         pthread_exit(NULL);
-     }
-     else
-     {
-         printf("Thread 2 ERROR\n");
-         rsrcBCnt--;
-         pthread_mutex_unlock(&rsrcB);
-         pthread_exit(NULL);
-     }
-
-     printf("THREAD 2 got B and A\n");
-     rsrcACnt--;
-     pthread_mutex_unlock(&rsrcA);
-     rsrcBCnt--;
-     pthread_mutex_unlock(&rsrcB);
-     printf("THREAD 2 done\n");
-   }
    pthread_exit(NULL);
 }
 
@@ -172,7 +150,7 @@ int main (int argc, char *argv[])
 {
    int rc, safe=0;
 
-   rsrcACnt=0, rsrcBCnt=0, noWait=0;
+   noWait=0;
 
    if(argc < 2)
    {
