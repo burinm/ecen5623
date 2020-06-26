@@ -43,7 +43,7 @@ deadlock: deadlock.o
 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $(OBJS2) $(LIBS)
 
 deadlock_timeout: deadlock_timeout.o
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $(OBJS4) $(LIBS)
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $(OBJS4) $(LIBS) -lm
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

@@ -9,6 +9,7 @@
 #include <unistd.h> //getpid
 #include <string.h> //strncmp
 #include <assert.h>
+#include <math.h>
 
 
 #define NUM_THREADS 2
@@ -39,7 +40,8 @@ int noWait=0;
 
 uint16_t rng16();
 
-uint16_t backoff = 1; //start with 1 second
+//manipulated with atomic fetch and add - may skip values, but we don't care
+volatile uint16_t backoff = 1; //start with 100ms
 
 void *grabRsrcs(void *threadp)
 {
@@ -93,12 +95,14 @@ assert(resource_two_id != -1);
 
      printf("THREAD %d grabbing resource %p @ %d sec and %d nsec\n", threadIdx, resource_to_aquire_one,
                                                             (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
-     printf("Thread %d backoff.. %ds\n", threadIdx, backoff);
+
+     int delay1 = (int)pow(2, backoff);
+     printf("Thread %d backoff.. %dms\n", threadIdx, delay1 * 100);
 
      clock_gettime(CLOCK_REALTIME, &timeNow);
-     rsrc1_timeout.tv_sec = timeNow.tv_sec + backoff;
-     rsrc1_timeout.tv_nsec = timeNow.tv_nsec;
-     backoff *= 2;
+     rsrc1_timeout.tv_sec = timeNow.tv_sec + delay1;
+     rsrc1_timeout.tv_nsec = timeNow.tv_nsec + delay1 * 10000000;
+     __sync_fetch_and_add(&backoff, 1);
 
      if((rc=pthread_mutex_timedlock(resource_to_aquire_one, &rsrc1_timeout)) != 0)
      {
@@ -127,12 +131,13 @@ assert(resource_two_id != -1);
 
      //uint16_t random_number = backoff();
      //printf("backoff.. %dns", random_number);
-     printf("Thread %d backoff.. %ds\n", threadIdx, backoff);
+     int delay2 = (int)pow(2, backoff);
+     printf("Thread %d backoff.. %dms\n", threadIdx, delay2 * 100);
 
      clock_gettime(CLOCK_REALTIME, &timeNow);
-     rsrc2_timeout.tv_sec = timeNow.tv_sec + backoff;
-     rsrc2_timeout.tv_nsec = timeNow.tv_nsec;
-     backoff *= 2;
+     rsrc2_timeout.tv_sec = timeNow.tv_sec;
+     rsrc2_timeout.tv_nsec = timeNow.tv_nsec + delay2 * 10000000;
+     __sync_fetch_and_add(&backoff, 1);
 
      printf("THREAD %d got %p, trying for %p @ %d sec and %d nsec\n",  threadIdx, resource_to_aquire_one,
                                                             resource_to_aquire_two,
