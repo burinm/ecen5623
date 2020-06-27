@@ -4,11 +4,16 @@
 #include <pthread.h>
 #include <stdlib.h>
 
+#define NAV_CLOCK   CLOCK_MONOTONIC
+
 typedef struct {
     double X;
     double Y;
     double Z;
-    uint64_t timestamp;
+    double Roll;
+    double Pitch;
+    double Yaw;
+    struct timespec timestamp;
 } pos_t;
 
 pos_t location;
@@ -28,6 +33,10 @@ memset(&location, 0, sizeof(pos_t));
 pthread_t position_reader;
 pthread_t position_writer;
 
+struct timespec tmp_time; 
+clock_getres(NAV_CLOCK, &tmp_time);
+printf("Clock resolution is %lu.%09uns\n", tmp_time.tv_sec, tmp_time.tv_nsec);
+
 pthread_create(&position_reader, NULL, &print_out_current_position, NULL);
 pthread_create(&position_writer, NULL, &fetch_position_and_time, NULL);
 
@@ -39,7 +48,9 @@ pthread_join(position_writer, NULL);
 void* print_out_current_position(void *arg) {
     while(1) {
         LOCK_LOCATION();
-            printf("X:%f Y:%f Z:%f @ %ld\n", location.X, location.Y, location.Z, location.timestamp);
+            printf("X:%f Y:%f Z:%f R:%f P:%f Y:%f @ %lu.%09u\n", location.X, location.Y, location.Z,
+                                location.Roll, location.Pitch, location.Yaw,
+                                location.timestamp.tv_sec, location.timestamp.tv_nsec);
         UNLOCK_LOCATION();
     }
 }
@@ -54,8 +65,10 @@ void* fetch_position_and_time(void *arg) {
 }
 
 
+static struct timespec nav_time_temp;
+
 void _nav(pos_t *l) {
-    double vector = rand() % 10000 / (double)1000;
+    double vector = rand() % 100000 / (double)1000000;
     int direction = rand() %6;
     switch (direction) {
         case 0:
@@ -81,5 +94,11 @@ void _nav(pos_t *l) {
             exit (-1);
     };
 
-    l->timestamp++;
+    l->Roll = 5;
+    l->Pitch = .05;
+    l->Yaw = .012345;
+
+    clock_gettime(NAV_CLOCK, &nav_time_temp);
+    l->timestamp.tv_sec = nav_time_temp.tv_sec;
+    l->timestamp.tv_nsec = nav_time_temp.tv_nsec;
 }
