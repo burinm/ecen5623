@@ -5,9 +5,9 @@
 #include <stdlib.h>
 
 typedef struct {
-    float X;
-    float Y;
-    float Z;
+    double X;
+    double Y;
+    double Z;
     uint64_t timestamp;
 } pos_t;
 
@@ -16,6 +16,10 @@ pos_t location;
 void* print_out_current_position(void *arg);
 void* fetch_position_and_time(void *arg);
 void _nav(pos_t *l);
+
+pthread_mutex_t location_mutex = PTHREAD_MUTEX_INITIALIZER;
+#define LOCK_LOCATION() pthread_mutex_lock(&location_mutex)
+#define UNLOCK_LOCATION() pthread_mutex_unlock(&location_mutex)
 
 int main() {
 
@@ -34,20 +38,24 @@ pthread_join(position_writer, NULL);
 
 void* print_out_current_position(void *arg) {
     while(1) {
-        printf("X:%f Y:%f Z:%f @ %ld\n", location.X, location.Y, location.Z, location.timestamp);
+        LOCK_LOCATION();
+            printf("X:%f Y:%f Z:%f @ %ld\n", location.X, location.Y, location.Z, location.timestamp);
+        UNLOCK_LOCATION();
     }
 }
 
 void* fetch_position_and_time(void *arg) {
 
     while(1) {
-        _nav(&location);
+        LOCK_LOCATION();
+            _nav(&location);
+        UNLOCK_LOCATION();
     }
 }
 
 
 void _nav(pos_t *l) {
-    float vector = rand() % 10000 / (float)1000;
+    double vector = rand() % 10000 / (double)1000;
     int direction = rand() %6;
     switch (direction) {
         case 0:
