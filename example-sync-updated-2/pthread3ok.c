@@ -20,20 +20,25 @@
 #include <unistd.h> //getpid
 #include <sys/time.h> //gettimeofday
 
+#include <sys/syscall.h>
+
+#define NUM_PROCESSORS  4 //Raspberry Pi 3b+
 
 #define NUM_THREADS		4
-#define START_SERVICE 		0
-#define HIGH_PRIO_SERVICE 	1
-#define MID_PRIO_SERVICE 	2
-#define LOW_PRIO_SERVICE 	3
+#define START_SERVICE 		0 //priority 2
+#define HIGH_PRIO_SERVICE 	1 //priority 99
+#define MID_PRIO_SERVICE 	2 //priority 98
+#define LOW_PRIO_SERVICE 	3 //priority 3
 #define CS_LENGTH 		10
 
+#define USE_MUTEX
+
 pthread_t threads[NUM_THREADS];
-pthread_attr_t rt_sched_attr;
-pthread_attr_t nrt_sched_attr;
+pthread_attr_t rt_sched_attr;  // For realtime H/M/L threads
+pthread_attr_t nrt_sched_attr; // For service thread
+
 int rt_max_prio, rt_min_prio;
 struct sched_param rt_param;
-struct sched_param nrt_param;
 struct sched_param main_param;
 
 typedef struct
@@ -44,8 +49,10 @@ typedef struct
 
 threadParams_t threadParams[NUM_THREADS];
 
+#ifdef USE_MUTEX
 pthread_mutex_t sharedMemSem;
 pthread_mutexattr_t rt_safe;
+#endif
 
 int rt_protocol;
 
@@ -53,7 +60,6 @@ volatile int runInterference=0, CScnt=0;
 volatile unsigned idleCount[NUM_THREADS];
 int intfTime=0;
 
-int numberOfProcessors;
 struct timeval timeNow, timeStartTest;
 
 unsigned const int fibLength = 47;  // if number is too large, unsigned will overflow
@@ -94,31 +100,13 @@ int main (int argc, char *argv[])
    {
      sscanf(argv[1], "%d", &intfTime);
      printf("interference time = %d secs\n", intfTime);
+#ifdef USE_MUTEX
      printf("unsafe mutex will be created\n");
+#endif
    }
 
    print_scheduler();
-   rc=sched_getparam(getpid(), &nrt_param);
-
-
-   CPU_ZERO(&threadcpu);
-   coreid=0;
-   printf("Setting thread %d to core %d\n", i, coreid);
-   CPU_SET(coreid, &threadcpu);
-   for(i=0; i<numberOfProcessors; i++)
-       if(CPU_ISSET(i, &threadcpu))  printf(" CPU-%d ", i);
-   printf("\nLaunching thread %d\n", i);
-
-   pthread_attr_init(&rt_sched_attr);
-   pthread_attr_setinheritsched(&rt_sched_attr, PTHREAD_EXPLICIT_SCHED);
-   pthread_attr_setschedpolicy(&rt_sched_attr, SCHED_FIFO);
-   pthread_attr_setaffinity_np(&rt_sched_attr, sizeof(cpu_set_t), &threadcpu);
-
-   pthread_attr_init(&nrt_sched_attr);
-   pthread_attr_setinheritsched(&rt_sched_attr, PTHREAD_EXPLICIT_SCHED);
-   pthread_attr_setschedpolicy(&rt_sched_attr, SCHED_RR);
-   //pthread_attr_setschedpolicy(&rt_sched_attr, SCHED_OTHER);
-
+   rc=sched_getparam(getpid(), &main_param);
 
    if (rc) 
    {
@@ -126,6 +114,38 @@ int main (int argc, char *argv[])
        perror(NULL);
        exit(-1);
    }
+
+   CPU_ZERO(&threadcpu);
+   coreid=0;
+   printf("Setting thread %d to core %d\n", i, coreid);
+   CPU_SET(coreid, &threadcpu);
+
+   for(i=0; i < NUM_PROCESSORS; i++) { 
+       if(CPU_ISSET(i, &threadcpu))  printf(" CPU-%d ", i);
+   }
+
+   //Setup realtime threads' schedule policy
+   if (pthread_attr_init(&rt_sched_attr) != 0) {
+    perror("pthread_attr_init");
+    exit(-1);
+   }
+
+   if (pthread_attr_setinheritsched(&rt_sched_attr, PTHREAD_EXPLICIT_SCHED) != 0) {
+    perror("pthread_attr_setinheritsched");
+    exit(-1);
+   }
+
+   if (pthread_attr_setschedpolicy(&rt_sched_attr, SCHED_FIFO) != 0) {
+    perror("pthread_attr_setschedpolicy");
+    exit(-1);
+   }
+
+   if (pthread_attr_setaffinity_np(&rt_sched_attr, sizeof(cpu_set_t), &threadcpu) != 0) {
+    perror("pthread_attr_setaffinity_np");
+    exit(-1);
+   }
+
+   print_scheduler();
 
    printf("min prio = %d, max prio = %d\n", rt_min_prio, rt_max_prio);
    pthread_attr_getscope(&rt_sched_attr, &scope);
@@ -137,14 +157,24 @@ int main (int argc, char *argv[])
    else
      printf("PTHREAD SCOPE UNKNOWN\n");
 
+#ifdef USE_MUTEX
    pthread_mutex_init(&sharedMemSem, NULL);
+#endif
 
-   rt_param.sched_priority = rt_min_prio+1;
-   pthread_attr_setschedparam(&rt_sched_attr, &rt_param);
+   //Setup service thread schedule policy
+   if (pthread_attr_init(&nrt_sched_attr) != 0) {
+    perror("pthread_attr_init");
+    exit(-1);
+   }
 
-   printf("\nCreating RT thread %d\n", START_SERVICE);
+   if (pthread_attr_setschedpolicy(&nrt_sched_attr, SCHED_OTHER) != 0) {
+    perror("pthread_attr_setschedpolicy");
+    exit(-1);
+   }
+
+   printf("\nCreating BE thread %d (service)\n", START_SERVICE);
    threadParams[START_SERVICE].threadIdx=START_SERVICE;
-   rc = pthread_create(&threads[START_SERVICE], &rt_sched_attr, startService, (void *)&threadParams[START_SERVICE]);
+   rc = pthread_create(&threads[START_SERVICE], &nrt_sched_attr, startService, (void *)&threadParams[START_SERVICE]);
 
    if (rc)
    {
@@ -163,8 +193,10 @@ int main (int argc, char *argv[])
      perror("START SERVICE");
 
 
+#ifdef USE_MUTEX
    if(pthread_mutex_destroy(&sharedMemSem) != 0)
      perror("mutex destroy");
+#endif
 
    printf("All threads done\n");
 
@@ -180,17 +212,16 @@ void *startService(void *threadid)
    runInterference=intfTime;
    gettimeofday(&timeStartTest, (void *)0);
 
-
+   print_scheduler();
 
    // CREATE L Thread as Non-RT or lowest prio RT thread and make sure it enters the C.S. before starting H
    //
-   rt_param.sched_priority = rt_min_prio;
+   rt_param.sched_priority = rt_min_prio + 2; //One above service start
    pthread_attr_setschedparam(&rt_sched_attr, &rt_param);
 
-   printf("\nCreating BE thread %d\n", LOW_PRIO_SERVICE);
+   printf("\nCreating RT thread %d (low)\n", LOW_PRIO_SERVICE);
    threadParams[LOW_PRIO_SERVICE].threadIdx=LOW_PRIO_SERVICE;
-   //rc = pthread_create(&threads[LOW_PRIO_SERVICE], &nrt_sched_attr, simpleTask, (void *)&threadParams[LOW_PRIO_SERVICE]);
-   rc = pthread_create(&threads[LOW_PRIO_SERVICE], &nrt_sched_attr, criticalSectionTask, (void *)&threadParams[LOW_PRIO_SERVICE]);
+   rc = pthread_create(&threads[LOW_PRIO_SERVICE], &rt_sched_attr, criticalSectionTask, (void *)&threadParams[LOW_PRIO_SERVICE]);
 
    if (rc)
    {
@@ -198,7 +229,7 @@ void *startService(void *threadid)
        perror(NULL);
        exit(-1);
    }
-   //pthread_detach(threads[LOW_PRIO_SERVICE]);
+
    gettimeofday(&timeNow, (void *)0);
    printf("Low prio %d thread SPAWNED at %lf sec\n", LOW_PRIO_SERVICE, dTime(timeNow, timeStartTest));
 
@@ -220,9 +251,8 @@ void *startService(void *threadid)
    pthread_attr_setschedparam(&rt_sched_attr, &rt_param);
 
 
-   printf("\nCreating RT thread %d, CScnt=%d\n", HIGH_PRIO_SERVICE, CScnt);
+   printf("\nCreating RT thread %d, (high) CScnt=%d\n", HIGH_PRIO_SERVICE, CScnt);
    threadParams[HIGH_PRIO_SERVICE].threadIdx=HIGH_PRIO_SERVICE;
-   //rc = pthread_create(&threads[HIGH_PRIO_SERVICE], &rt_sched_attr, simpleTask, (void *)&threadParams[HIGH_PRIO_SERVICE]);
    rc = pthread_create(&threads[HIGH_PRIO_SERVICE], &rt_sched_attr, criticalSectionTask, (void *)&threadParams[HIGH_PRIO_SERVICE]);
 
    if (rc)
@@ -231,7 +261,7 @@ void *startService(void *threadid)
        perror(NULL);
        exit(-1);
    }
-   //pthread_detach(threads[HIGH_PRIO_SERVICE]);
+
    gettimeofday(&timeNow, (void *)0);
    printf("High prio %d thread SPAWNED at %lf sec\n", HIGH_PRIO_SERVICE, dTime(timeNow, timeStartTest));
 
@@ -245,7 +275,7 @@ void *startService(void *threadid)
        rt_param.sched_priority = rt_max_prio-1;
        pthread_attr_setschedparam(&rt_sched_attr, &rt_param);
 
-       printf("\nCreating RT thread %d\n", MID_PRIO_SERVICE);
+       printf("\nCreating RT thread %d (medium)\n", MID_PRIO_SERVICE);
        threadParams[MID_PRIO_SERVICE].threadIdx=MID_PRIO_SERVICE;
        rc = pthread_create(&threads[MID_PRIO_SERVICE], &rt_sched_attr, simpleTask, (void *)&threadParams[MID_PRIO_SERVICE]);
 
@@ -255,7 +285,7 @@ void *startService(void *threadid)
            perror(NULL);
            exit(-1);
        }
-       //pthread_detach(threads[MID_PRIO_SERVICE]);
+
        gettimeofday(&timeNow, (void *)0);
        printf("Middle prio %d thread SPAWNED at %lf sec\n", MID_PRIO_SERVICE, dTime(timeNow, timeStartTest));
     }
@@ -328,21 +358,23 @@ void print_scheduler(void)
 {
    int schedType;
 
-   schedType = sched_getscheduler(getpid());
+   //Modified to work on threads (tid = pid for parent process)
+   pid_t tid = syscall(SYS_gettid);
+   schedType = sched_getscheduler(tid);
 
    switch(schedType)
    {
      case SCHED_FIFO:
-	   printf("Pthread Policy is SCHED_FIFO\n");
+	   printf("(%d) Pthread Policy is SCHED_FIFO\n", tid);
 	   break;
      case SCHED_OTHER:
-	   printf("Pthread Policy is SCHED_OTHER\n");
+	   printf("(%d) Pthread Policy is SCHED_OTHER\n", tid);
        break;
      case SCHED_RR:
-	   printf("Pthread Policy is SCHED_RR\n");
+	   printf("(%d) Pthread Policy is SCHED_RR\n", tid);
 	   break;
      default:
-       printf("Pthread Policy is UNKNOWN\n");
+       printf("(%d) Pthread Policy is UNKNOWN\n", tid);
    }
 }
 
@@ -358,8 +390,7 @@ void *simpleTask(void *threadp)
   thread=pthread_self();
   cpucore=sched_getcpu();
 
-  CPU_ZERO(&cpuset);
-  pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+  print_scheduler();
 
   do
   {
@@ -413,6 +444,8 @@ void *criticalSectionTask(void *threadp)
   threadParams_t *threadParams = (threadParams_t *)threadp;
   int idleIdx = threadParams->threadIdx, cpucore;
 
+  print_scheduler();
+
   thread=pthread_self();
   cpucore=sched_getcpu();
 
@@ -420,7 +453,9 @@ void *criticalSectionTask(void *threadp)
   else if(idleIdx == MID_PRIO_SERVICE) printf("\nCS-M REQUEST\n");
   else if(idleIdx == HIGH_PRIO_SERVICE) printf("\nCS-H REQUEST\n");
 
-  //pthread_mutex_lock(&sharedMemSem);
+#ifdef USE_MUTEX
+  pthread_mutex_lock(&sharedMemSem);
+#endif
   CScnt++;
 
   if(idleIdx == LOW_PRIO_SERVICE) printf("\nCS-L ENTRY %u\n", CScnt);
@@ -442,7 +477,9 @@ void *criticalSectionTask(void *threadp)
   else if(idleIdx == MID_PRIO_SERVICE) printf("\nCS-M LEAVING\n");
   else if(idleIdx == HIGH_PRIO_SERVICE) printf("\nCS-H LEAVING\n");
 
-  //pthread_mutex_unlock(&sharedMemSem);
+#ifdef USE_MUTEX
+  pthread_mutex_unlock(&sharedMemSem);
+#endif
 
   if(idleIdx == LOW_PRIO_SERVICE) printf("\nCS-L EXIT\n");
   else if(idleIdx == MID_PRIO_SERVICE) printf("\nCS-M EXIT\n");
@@ -451,13 +488,12 @@ void *criticalSectionTask(void *threadp)
   gettimeofday(&timeNow, (void *)0);
 
   if(idleIdx == LOW_PRIO_SERVICE)
-      printf("\n**** LOW PRIO %d on core %d UNPROTECTED CRIT SECTION WORK COMPLETED at %lf sec\n", idleIdx, cpucore, dTime(timeNow, timeStartTest));
+      printf("\n**** LOW PRIO %d on core %d CRIT SECTION WORK COMPLETED at %lf sec\n", idleIdx, cpucore, dTime(timeNow, timeStartTest));
   else if(idleIdx == MID_PRIO_SERVICE)
-      printf("\n**** MID PRIO %d on core %d UNPROTECTED CRIT SECTION WORK COMPLETED at %lf sec\n", idleIdx, cpucore, dTime(timeNow, timeStartTest));
+      printf("\n**** MID PRIO %d on core %d CRIT SECTION WORK COMPLETED at %lf sec\n", idleIdx, cpucore, dTime(timeNow, timeStartTest));
   else if(idleIdx == HIGH_PRIO_SERVICE)
-      printf("\n**** HIGH PRIO %d on core %d UNPROTECTED CRIT SECTION WORK COMPLETED at %lf sec\n", idleIdx, cpucore, dTime(timeNow, timeStartTest));
+      printf("\n**** HIGH PRIO %d on core %d CRIT SECTION WORK COMPLETED at %lf sec\n", idleIdx, cpucore, dTime(timeNow, timeStartTest));
 
   pthread_exit(NULL);
 
 }
-
