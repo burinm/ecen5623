@@ -33,7 +33,6 @@ pthread_attr_t rt_sched_attr;
 pthread_attr_t nrt_sched_attr;
 int rt_max_prio, rt_min_prio;
 struct sched_param rt_param;
-struct sched_param nrt_param;
 struct sched_param main_param;
 
 typedef struct
@@ -98,7 +97,14 @@ int main (int argc, char *argv[])
    }
 
    print_scheduler();
-   rc=sched_getparam(getpid(), &nrt_param);
+   rc=sched_getparam(getpid(), &main_param);
+
+   if (rc) 
+   {
+       printf("ERROR - run with sudo; sched_setscheduler rc is %d\n", rc);
+       perror(NULL);
+       exit(-1);
+   }
 
 
    CPU_ZERO(&threadcpu);
@@ -115,17 +121,11 @@ int main (int argc, char *argv[])
    pthread_attr_setaffinity_np(&rt_sched_attr, sizeof(cpu_set_t), &threadcpu);
 
    pthread_attr_init(&nrt_sched_attr);
-   pthread_attr_setinheritsched(&rt_sched_attr, PTHREAD_EXPLICIT_SCHED);
-   pthread_attr_setschedpolicy(&rt_sched_attr, SCHED_RR);
-   //pthread_attr_setschedpolicy(&rt_sched_attr, SCHED_OTHER);
+   pthread_attr_setinheritsched(&nrt_sched_attr, PTHREAD_EXPLICIT_SCHED);
+   //pthread_attr_setschedpolicy(&nrt_sched_attr, SCHED_RR);
+   pthread_attr_setschedpolicy(&nrt_sched_attr, SCHED_OTHER);
 
 
-   if (rc) 
-   {
-       printf("ERROR - run with sudo; sched_setscheduler rc is %d\n", rc);
-       perror(NULL);
-       exit(-1);
-   }
 
    printf("min prio = %d, max prio = %d\n", rt_min_prio, rt_max_prio);
    pthread_attr_getscope(&rt_sched_attr, &scope);
@@ -166,11 +166,11 @@ int main (int argc, char *argv[])
    }
 
    rt_param.sched_priority = rt_min_prio+1;
-   pthread_attr_setschedparam(&rt_sched_attr, &rt_param);
+   pthread_attr_setschedparam(&nrt_sched_attr, &rt_param);
 
    printf("\nCreating RT thread %d\n", START_SERVICE);
    threadParams[START_SERVICE].threadIdx=START_SERVICE;
-   rc = pthread_create(&threads[START_SERVICE], &rt_sched_attr, startService, (void *)&threadParams[START_SERVICE]);
+   rc = pthread_create(&threads[START_SERVICE], &nrt_sched_attr, startService, (void *)&threadParams[START_SERVICE]);
 
    if (rc)
    {
@@ -215,8 +215,7 @@ void *startService(void *threadid)
 
    printf("\nCreating BE thread %d\n", LOW_PRIO_SERVICE);
    threadParams[LOW_PRIO_SERVICE].threadIdx=LOW_PRIO_SERVICE;
-   rc = pthread_create(&threads[LOW_PRIO_SERVICE], &nrt_sched_attr, simpleTask, (void *)&threadParams[LOW_PRIO_SERVICE]);
-   //rc = pthread_create(&threads[LOW_PRIO_SERVICE], &nrt_sched_attr, criticalSectionTask, (void *)&threadParams[LOW_PRIO_SERVICE]);
+   rc = pthread_create(&threads[LOW_PRIO_SERVICE], &rt_sched_attr, criticalSectionTask, (void *)&threadParams[LOW_PRIO_SERVICE]);
 
    if (rc)
    {
@@ -224,7 +223,7 @@ void *startService(void *threadid)
        perror(NULL);
        exit(-1);
    }
-   //pthread_detach(threads[LOW_PRIO_SERVICE]);
+
    gettimeofday(&timeNow, (void *)0);
    printf("Low prio %d thread SPAWNED at %lf sec\n", LOW_PRIO_SERVICE, dTime(timeNow, timeStartTest));
 
@@ -238,7 +237,6 @@ void *startService(void *threadid)
    //printf("CScnt=%d\n", CScnt);
 
 
-
    // CREATE H Thread as RT thread at highest priority, but it will block on C.S. semaphore held by L until
    // L finishes the C.S.
    //
@@ -248,7 +246,6 @@ void *startService(void *threadid)
 
    printf("\nCreating RT thread %d, CScnt=%d\n", HIGH_PRIO_SERVICE, CScnt);
    threadParams[HIGH_PRIO_SERVICE].threadIdx=HIGH_PRIO_SERVICE;
-   //rc = pthread_create(&threads[HIGH_PRIO_SERVICE], &rt_sched_attr, simpleTask, (void *)&threadParams[HIGH_PRIO_SERVICE]);
    rc = pthread_create(&threads[HIGH_PRIO_SERVICE], &rt_sched_attr, criticalSectionTask, (void *)&threadParams[HIGH_PRIO_SERVICE]);
 
    if (rc)
@@ -257,7 +254,7 @@ void *startService(void *threadid)
        perror(NULL);
        exit(-1);
    }
-   //pthread_detach(threads[HIGH_PRIO_SERVICE]);
+
    gettimeofday(&timeNow, (void *)0);
    printf("High prio %d thread SPAWNED at %lf sec\n", HIGH_PRIO_SERVICE, dTime(timeNow, timeStartTest));
 
@@ -281,7 +278,7 @@ void *startService(void *threadid)
            perror(NULL);
            exit(-1);
        }
-       //pthread_detach(threads[MID_PRIO_SERVICE]);
+
        gettimeofday(&timeNow, (void *)0);
        printf("Middle prio %d thread SPAWNED at %lf sec\n", MID_PRIO_SERVICE, dTime(timeNow, timeStartTest));
     }
