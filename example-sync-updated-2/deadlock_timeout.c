@@ -16,6 +16,10 @@
 #define THREAD_1 1
 #define THREAD_2 2
 
+//Select only one (or none)
+#define RANDOM_BACKOFF
+//#define EXPONENTIAL_BACKOFF
+
 typedef struct
 {
     int threadIdx;
@@ -38,10 +42,11 @@ int rsrcCnts[NUM_THREADS] = {0};
 
 int noWait=0;
 
-uint16_t rng16();
 
+#ifdef EXPONENTIAL_BACKOFF
 //manipulated with atomic fetch and add - may skip values, but we don't care
 volatile uint16_t backoff = 1; //start with 100ms
+#endif
 
 void *grabRsrcs(void *threadp)
 {
@@ -57,11 +62,6 @@ void *grabRsrcs(void *threadp)
    else printf("Unknown thread started\n");
 
    clock_gettime(CLOCK_REALTIME, &timeNow);
-
-   //rsrc1_timeout.tv_sec = timeNow.tv_sec + 2;
-   //rsrc1_timeout.tv_nsec = timeNow.tv_nsec;
-   //rsrc2_timeout.tv_sec = timeNow.tv_sec + 3;
-   //rsrc2_timeout.tv_nsec = timeNow.tv_nsec;
 
 
 assert(threadIdx == THREAD_1 || threadIdx == THREAD_2);
@@ -96,18 +96,42 @@ assert(resource_two_id != -1);
      printf("THREAD %d grabbing resource %p @ %d sec and %d nsec\n", threadIdx, resource_to_aquire_one,
                                                             (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
 
+#ifdef EXPONENTIAL_BACKOFF
      int delay1 = (int)pow(2, backoff);
-     printf("Thread %d backoff.. %dms\n", threadIdx, delay1 * 100);
+#endif
+
+#ifdef RANDOM_BACKOFF
+     int delay1 = (rand() % 10) + 1;
+printf("rand1 = %lu\n", delay1);
+#endif
+
 
      clock_gettime(CLOCK_REALTIME, &timeNow);
-     rsrc1_timeout.tv_sec = timeNow.tv_sec + delay1;
-     rsrc1_timeout.tv_nsec = timeNow.tv_nsec + delay1 * 10000000;
+#ifdef EXPONENTIAL_BACKOFF
+     rsrc1_timeout.tv_sec = timeNow.tv_sec;
+     rsrc1_timeout.tv_nsec = timeNow.tv_nsec + delay1 * 1000000;
      __sync_fetch_and_add(&backoff, 1);
+     printf("Thread %d backoff.. %ums\n", threadIdx, delay1);
+#endif
 
-     if((rc=pthread_mutex_timedlock(resource_to_aquire_one, &rsrc1_timeout)) != 0)
+#ifdef RANDOM_BACKOFF
+     rsrc1_timeout.tv_sec = timeNow.tv_sec + delay1;
+     rsrc1_timeout.tv_nsec = timeNow.tv_nsec;
+     printf("Thread %d backoff.. %us\n", threadIdx, delay1);
+#endif
+
+#if defined (EXPONENTIAL_BACKOFF) || defined (RANDOM_BACKOFF)
+     rc=pthread_mutex_timedlock(resource_to_aquire_one, &rsrc1_timeout);
+#else
+     rc=pthread_mutex_lock(resource_to_aquire_one);
+#endif
+     if (rc == 0)
      {
-         printf("Thread %d ERROR\n", threadIdx);
-         pthread_exit(NULL);
+         printf("Thread %d GOT %p\n", threadIdx, resource_to_aquire_one);
+         rsrcCnts[resource_one_id]++;
+         printf("resource A (%p) count=%d, resource B (%p) count=%d\n", &rsrcA, rsrcCnts[RESOURCE_A_ID],
+                                                                        &rsrcB, rsrcCnts[RESOURCE_B_ID]);
+         got_one = 1;
      }
      else if(rc == ETIMEDOUT)
      {
@@ -115,11 +139,8 @@ assert(resource_two_id != -1);
      }
      else
      {
-         printf("Thread %d GOT %p\n", threadIdx, resource_to_aquire_one);
-         rsrcCnts[resource_one_id]++;
-         printf("resource A (%p) count=%d, resource B (%p) count=%d\n", &rsrcA, rsrcCnts[RESOURCE_A_ID],
-                                                                        &rsrcB, rsrcCnts[RESOURCE_B_ID]);
-        got_one = 1;
+         printf("Thread %d ERROR\n", threadIdx);
+         pthread_exit(NULL);
      }
 
     if (got_one && got_two) {
@@ -129,22 +150,38 @@ assert(resource_two_id != -1);
      // if unsafe test, immediately try to acquire resource two 
      if(!noWait) usleep(1000000);
 
-     //uint16_t random_number = backoff();
-     //printf("backoff.. %dns", random_number);
+#ifdef EXPONENTIAL_BACKOFF
      int delay2 = (int)pow(2, backoff);
-     printf("Thread %d backoff.. %dms\n", threadIdx, delay2 * 100);
+#endif
+
+#ifdef RANDOM_BACKOFF
+     int delay2 = (rand() % 10) + 1;
+printf("rand2 = %lu\n", delay2);
+#endif
 
      clock_gettime(CLOCK_REALTIME, &timeNow);
+#ifdef EXPONENTIAL_BACKOFF
      rsrc2_timeout.tv_sec = timeNow.tv_sec;
-     rsrc2_timeout.tv_nsec = timeNow.tv_nsec + delay2 * 10000000;
+     rsrc2_timeout.tv_nsec = timeNow.tv_nsec + delay2 * 100000;
      __sync_fetch_and_add(&backoff, 1);
+     printf("Thread %d backoff.. %ums\n", threadIdx, delay2);
+#endif
+
+#ifdef RANDOM_BACKOFF
+     rsrc2_timeout.tv_sec = timeNow.tv_sec + delay2;
+     rsrc2_timeout.tv_nsec = timeNow.tv_nsec;
+     printf("Thread %d backoff.. %us\n", threadIdx, delay2);
+#endif
 
      printf("THREAD %d got %p, trying for %p @ %d sec and %d nsec\n",  threadIdx, resource_to_aquire_one,
                                                             resource_to_aquire_two,
                                                             (int)timeNow.tv_sec, (int)timeNow.tv_nsec);
 
+#if defined (EXPONENTIAL_BACKOFF) || defined (RANDOM_BACKOFF)
      rc=pthread_mutex_timedlock(resource_to_aquire_two, &rsrc2_timeout);
-     //rc=pthread_mutex_lock(&rsrcB);
+#else
+     rc=pthread_mutex_lock(resource_to_aquire_two);
+#endif
      if(rc == 0)
      {
          clock_gettime(CLOCK_REALTIME, &timeNow);
@@ -189,8 +226,13 @@ assert(resource_two_id != -1);
 int main (int argc, char *argv[])
 {
    int rc, safe=0;
-
    noWait=0;
+
+#ifdef RANDOM_BACKOFF
+   struct timespec temp_time;
+   clock_gettime(CLOCK_REALTIME, &temp_time);
+   srand(temp_time.tv_nsec);
+#endif
 
    if(argc < 2)
    {
@@ -252,17 +294,4 @@ int main (int argc, char *argv[])
    printf("All done\n");
 
    exit(0);
-}
-
-static uint16_t random_number = 4;
-static struct timespec a_time;
-/* Psuedo RNG taken from my own code here:
-    https://github.com/burinm/softsynth/blob/master/wave_function.c
-*/
-uint16_t rng16() {
-    random_number= (uint16_t)( 74 *random_number) % (uint16_t)32771;
-    a_time.tv_sec = 0;
-    a_time.tv_nsec = random_number;
-
-    return random_number;
 }
