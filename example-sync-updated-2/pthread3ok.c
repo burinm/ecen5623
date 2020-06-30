@@ -25,11 +25,16 @@
 #define NUM_PROCESSORS  4 //Raspberry Pi 3b+
 
 #define NUM_THREADS		4
-#define START_SERVICE 		0 //priority 2
-#define HIGH_PRIO_SERVICE 	1 //priority 99
-#define MID_PRIO_SERVICE 	2 //priority 98
-#define LOW_PRIO_SERVICE 	3 //priority 3
+#define START_SERVICE 		0
+#define HIGH_PRIO_SERVICE 	1
+#define MID_PRIO_SERVICE 	2
+#define LOW_PRIO_SERVICE 	3
 #define CS_LENGTH 		10
+
+//#define START_SERVICE_PRI       (rt_max_prio )
+#define HIGH_PRIO_SERVICE_PRI   (rt_max_prio - 1)
+#define MID_PRIO_SERVICE_PRI    (rt_max_prio - 2)
+#define LOW_PRIO_SERVICE_PRI    (rt_max_prio - 3)
 
 #define USE_MUTEX
 
@@ -172,6 +177,7 @@ int main (int argc, char *argv[])
     exit(-1);
    }
 
+   // **Note, no priority assigned because this is SCHED_OTHER
    printf("\nCreating BE thread %d (service)\n", START_SERVICE);
    threadParams[START_SERVICE].threadIdx=START_SERVICE;
    rc = pthread_create(&threads[START_SERVICE], &nrt_sched_attr, startService, (void *)&threadParams[START_SERVICE]);
@@ -216,7 +222,7 @@ void *startService(void *threadid)
 
    // CREATE L Thread as Non-RT or lowest prio RT thread and make sure it enters the C.S. before starting H
    //
-   rt_param.sched_priority = rt_min_prio + 2; //One above service start
+   rt_param.sched_priority = LOW_PRIO_SERVICE_PRI;
    pthread_attr_setschedparam(&rt_sched_attr, &rt_param);
 
    printf("\nCreating RT thread %d (low)\n", LOW_PRIO_SERVICE);
@@ -247,7 +253,7 @@ void *startService(void *threadid)
    // CREATE H Thread as RT thread at highest priority, but it will block on C.S. semaphore held by L until
    // L finishes the C.S.
    //
-   rt_param.sched_priority = rt_max_prio;
+   rt_param.sched_priority = HIGH_PRIO_SERVICE_PRI;
    pthread_attr_setschedparam(&rt_sched_attr, &rt_param);
 
 
@@ -272,7 +278,7 @@ void *startService(void *threadid)
    //
    if(runInterference > 0)
    {
-       rt_param.sched_priority = rt_max_prio-1;
+       rt_param.sched_priority = MID_PRIO_SERVICE_PRI;
        pthread_attr_setschedparam(&rt_sched_attr, &rt_param);
 
        printf("\nCreating RT thread %d (medium)\n", MID_PRIO_SERVICE);
