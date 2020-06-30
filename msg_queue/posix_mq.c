@@ -10,19 +10,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <assert.h>
-
-#define GLOBAL_Q "/global_q"
-#define MAX_QUEUE_SIZE 10
-#define MAX_PAYLOAD_SZ 255 
-
-#define HI_PRI  0 //TODO - research this
-#define NO_TIMEOUT  NULL
-
-#define MQ_DEFAULTS { \
-    .mq_flags = 0, \
-    .mq_maxmsg =  MAX_QUEUE_SIZE, \
-    .mq_msgsize = MAX_PAYLOAD_SZ, \
-    .mq_curmsgs = 0}
+#include "mq.h"
 
 mqd_t Q;
 
@@ -86,16 +74,18 @@ void* send_func(void *a) {
 }
 
 void* receive_func(void *a) {
+    int prio = 0;
     int bytes_received = 0;
     while(running) {
-        bytes_received = mq_receive(Q, _m_buffer,  sizeof(canned_msg), HI_PRI);
+        bytes_received = mq_receive(Q, _m_buffer,  sizeof(canned_msg), &prio);
         if (bytes_received == -1) {
             perror("Couldn't get message!\n");
             running = 0;
             break;
         }
         if (bytes_received > 0) {
-            printf("[%s]", _m_buffer);
+            printf("receive: msg [%s] received with priority = %d, length = %d\n", _m_buffer, prio, bytes_received);
+            //printf("[%s]", _m_buffer);
         }
     }
 }
