@@ -5,7 +5,6 @@
         https://github.com/burinm/aesd5013/blob/master/src/hw4/ipcs/message.c
 */
 
-#define GLOBAL_Q "/global_q"
 #define MAX_QUEUE_SIZE 10
 #define MAX_PAYLOAD_SZ 128
 

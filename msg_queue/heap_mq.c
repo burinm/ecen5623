@@ -26,12 +26,20 @@ void* send_func(void *a);
 void* receive_func(void *a);
 void print_buf(char* b, int s);
 
+/* catch signal */
+#include <signal.h>
+void ctrl_c(int addr);
+
+
 int running = 1;
 
 int main() {
     int ret_code = 0;
 
-printf("sizeof char = %d\n", sizeof(char));
+//install ctrl_c signal handler
+struct sigaction action;
+action.sa_handler = ctrl_c;
+sigaction(SIGINT, &action, NULL);
 
 struct mq_attr mq_attr = MQ_DEFAULTS;
 mq_attr.mq_msgsize = sizeof(image_frame_t);
@@ -45,7 +53,7 @@ if (Q == (mqd_t)-1) {
 }
 
 { //flush queue
-    printf("flushing queue");
+    printf("flushing queue\n");
     int prio;
     char b[sizeof(image_frame_t)];
     struct timespec _t;
@@ -84,30 +92,41 @@ void* send_func(void *a) {
     image_frame_t p;
     int id = 0;
 
+    struct timespec _t;
     while(running) {
         //block on signal for frame...
         p.id = id++;
         p.len = sizeof(imagebuff);
         p.buffer = (void*)malloc(p.len);
         if (p.buffer) {
-            memcpy(b, &p, sizeof(image_frame_t));
-printf("sending[%d]: priority = %d, length = %d buffer_len %d buff_ptr %p\n", p.id, HI_PRI, sizeof(image_frame_t), p.len, p.buffer);
-print_buf(b, sizeof(image_frame_t));
+
             /* Best to send a frame structure here
                 I tried sending a raw pointer as data
                 and there were endian, cast char* issues
                 This is probably more portable
             */
-            bytes_sent = mq_send(Q, b, sizeof(image_frame_t), HI_PRI);
+            memcpy(b, &p, sizeof(image_frame_t));
+
+            printf("sending[%d]: priority = %d, length = %d buffer_len %d buff_ptr %p\n",
+                    p.id, HI_PRI, sizeof(image_frame_t), p.len, p.buffer);
+//print_buf(b, sizeof(image_frame_t));
+            clock_gettime(CLOCK_REALTIME, &_t);
+            _t.tv_sec += 2;
+            bytes_sent = mq_timedsend(Q, b, sizeof(image_frame_t), HI_PRI, &_t);
             if (bytes_sent == -1) {
                 perror("Couldn't enqueue message!\n");
                 running = 0;
                 break;
             }
+            if (bytes_sent == 0) {
+                perror("Message not sent: ");
+            }
+
         } else {
             printf("Couldn't malloc buffer!\n");
         }
     }
+printf("send thread exiting\n");
 }
 
 void* receive_func(void *a) {
@@ -115,36 +134,35 @@ void* receive_func(void *a) {
     int bytes_received = 0;
     char b[sizeof(image_frame_t)];
     image_frame_t p;
+
+    struct timespec _t;
     while(running) {
-#if 0
-        struct timespec _t;
+
         clock_gettime(CLOCK_REALTIME, &_t);
         _t.tv_sec += 2;
 
-        bytes_received = mq_timedreceive(Q, (char*)&p, sizeof(image_frame_t), &prio, &_t);
-#endif
-        bytes_received = mq_receive(Q, b, sizeof(image_frame_t), &prio);
+        bytes_received = mq_timedreceive(Q, b, sizeof(image_frame_t), &prio, &_t);
         if (bytes_received == -1) {
             perror("Couldn't get message!\n");
             running = 0;
             break;
         }
-perror("-->");
+
         if (errno == ETIMEDOUT) {
             continue;
         }
+
         if (bytes_received > 0) {
             memcpy(&p, b, sizeof(image_frame_t));
-            printf("receive[%d]: priority = %d, length = %d buffer_len %d buff_ptr %p\n", p.id, prio, bytes_received, p.len, p.buffer);
-print_buf(b, sizeof(image_frame_t));
-            //On a real system, we might check pointer range as well for sanity
-//printf("freeing %p 0x%x\n", p.buffer, (unsigned int)p.buffer);
-printf("freeing %p\n", p.buffer);
+            printf("receive[%d]: priority = %d, length = %d buffer_len %d buff_ptr %p\n",
+                        p.id, prio, bytes_received, p.len, p.buffer);
+///print_buf(b, sizeof(image_frame_t));
             if (p.buffer) {
                 free(p.buffer);
             }
         }
     }
+printf("receive thread exiting\n");
 }
 
 void print_buf(char* b, int s) {
@@ -156,3 +174,9 @@ void print_buf(char* b, int s) {
     }
     printf("\n");
 }
+
+void ctrl_c(int addr)
+{
+    running=0;
+}
+

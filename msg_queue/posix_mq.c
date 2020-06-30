@@ -12,6 +12,7 @@
 #include <assert.h>
 #include "mq.h"
 
+#define GLOBAL_Q "/global_q"
 mqd_t Q;
 
 void* send_func(void *a);
