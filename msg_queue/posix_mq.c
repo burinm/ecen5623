@@ -70,6 +70,8 @@ void* send_func(void *a) {
             perror("Couldn't enqueue message!\n");
             running = 0;
             break;
+        } else {
+            printf("send: message successfully sent\n");
         }
     }
 }
