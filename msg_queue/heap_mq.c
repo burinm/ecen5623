@@ -119,7 +119,7 @@ void* send_func(void *a) {
                 break;
             }
             if (bytes_sent == 0) {
-                perror("Message not sent: ");
+                //In this case 0 is success
             }
 
         } else {

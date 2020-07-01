@@ -26,9 +26,6 @@ char* _m_buffer = NULL;
 int main() {
     int ret_code = 0;
 
-printf("-->%d\n", sizeof(canned_msg));
-printf("-->%d\n", sizeof(canned_msg));
-
 struct mq_attr mq_attr = MQ_DEFAULTS;
 mq_attr.mq_msgsize = sizeof(canned_msg);
 
