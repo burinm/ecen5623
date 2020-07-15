@@ -55,14 +55,17 @@ if (Q == (mqd_t)-1) {
 { //flush queue
     printf("flushing queue\n");
     int prio;
-    char b[sizeof(image_frame_t)];
+    char b[MAX_PAYLOAD_SZ];
     struct timespec _t;
     while(1) {
             clock_gettime(CLOCK_REALTIME, &_t);
             _t.tv_sec += 2;
-            int s =  mq_timedreceive(Q, b, sizeof(image_frame_t), &prio, &_t);
+            int s =  mq_timedreceive(Q, b, MAX_PAYLOAD_SZ, &prio, &_t);
             if (s == 0 || errno == ETIMEDOUT) {
                 break;
+            }
+            if (s == -1) {
+                perror(NULL);
             }
             printf(".");
             fflush(stdout);
@@ -88,31 +91,19 @@ return ret_code;
 
 void* send_func(void *a) {
     int bytes_sent = 0;
-    char b[sizeof(image_frame_t)];
-    image_frame_t p;
-    int id = 0;
+    char b[sizeof(char*)];
 
     struct timespec _t;
     while(running) {
-        //block on signal for frame...
-        p.id = id++;
-        p.len = sizeof(imagebuff);
-        p.buffer = (void*)malloc(p.len);
-        if (p.buffer) {
-
-            /* Best to send a frame structure here
-                I tried sending a raw pointer as data
-                and there were endian, cast char* issues
-                This is probably more portable
-            */
-            memcpy(b, &p, sizeof(image_frame_t));
-
-            printf("sending[%d]: priority = %d, length = %d buffer_len %d buff_ptr %p\n",
-                    p.id, HI_PRI, sizeof(image_frame_t), p.len, p.buffer);
-//print_buf(b, sizeof(image_frame_t));
+        char* p = (char*)malloc(4096);
+        if (p) {
+            memcpy(b, &p, sizeof(char*));
+            printf("sending[]: priority = %d, length = %d buff_ptr %p\n",
+                    HI_PRI, sizeof(char*), p);
+            //print_buf(b, sizeof(image_frame_t));
             clock_gettime(CLOCK_REALTIME, &_t);
             _t.tv_sec += 2;
-            bytes_sent = mq_timedsend(Q, b, sizeof(image_frame_t), HI_PRI, &_t);
+            bytes_sent = mq_timedsend(Q, b, sizeof(char*), HI_PRI, &_t);
             if (bytes_sent == -1) {
                 perror("Couldn't enqueue message!\n");
                 running = 0;
@@ -132,8 +123,7 @@ printf("send thread exiting\n");
 void* receive_func(void *a) {
     int prio = 0;
     int bytes_received = 0;
-    char b[sizeof(image_frame_t)];
-    image_frame_t p;
+    char b[MAX_PAYLOAD_SZ];
 
     struct timespec _t;
     while(running) {
@@ -141,7 +131,7 @@ void* receive_func(void *a) {
         clock_gettime(CLOCK_REALTIME, &_t);
         _t.tv_sec += 2;
 
-        bytes_received = mq_timedreceive(Q, b, sizeof(image_frame_t), &prio, &_t);
+        bytes_received = mq_timedreceive(Q, b, MAX_PAYLOAD_SZ, &prio, &_t);
         if (bytes_received == -1) {
             perror("Couldn't get message!\n");
             running = 0;
@@ -153,12 +143,13 @@ void* receive_func(void *a) {
         }
 
         if (bytes_received > 0) {
-            memcpy(&p, b, sizeof(image_frame_t));
-            printf("receive[%d]: priority = %d, length = %d buffer_len %d buff_ptr %p\n",
-                        p.id, prio, bytes_received, p.len, p.buffer);
+            printf("receive[]: priority = %d, length = %d buff_ptr %p\n",
+                         prio, bytes_received, b);
 ///print_buf(b, sizeof(image_frame_t));
-            if (p.buffer) {
-                free(p.buffer);
+            char* p;
+            memcpy(&p, b, sizeof(char*));
+            if (p) {
+                free(p);
             }
         }
     }
