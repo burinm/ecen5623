@@ -16,11 +16,12 @@
 #define xstr(s) str(s)
 #define str(s) #s
 
-#define LABEL_LEN   15
 #define PRINT_LABEL_HELPER(s, l)    printf("%-" xstr(l) "s", s)
-#define PRINT_LABEL(s)  PRINT_LABEL_HELPER(s, LABEL_LEN)
+#define PRINT_LABEL(s, l)  PRINT_LABEL_HELPER(s, l)
 
 int m=0;
+int word_length = 0;
+int data_length = 0;
 uint64_t memory = 0;
 
 void write_data(uint64_t);
@@ -40,8 +41,8 @@ if (m < 1) {
     exit(-1);
 }
 
-int word_length = pow(2, m) - 1;
-int data_length = pow(2, m) - m - 1;
+word_length = pow(2, m) - 1;
+data_length = pow(2, m) - m - 1;
 
 int integer_max =  sizeof(size_t) * 8;
 if (word_length > integer_max) {
@@ -73,13 +74,13 @@ printf("word bits    : %.3d\n", word_length);
 
 // Header
 printf("\n");
-PRINT_LABEL("Bit"); 
+PRINT_LABEL("Bit", 15); 
 for (int b=1; b <= word_length; b++) {
     printf(" %2.d  ", b);
 }
 printf("\n");
 
-PRINT_LABEL("");
+PRINT_LABEL("", 15);
 int d_num = 1;
 for (int p=0; p< m; p++) {
     printf("[p%-2d]", (int)pow(2,p)); 
@@ -90,8 +91,9 @@ for (int p=0; p< m; p++) {
 printf("\n");
 
 
-for (int p=0; p< m; p++) {
-    PRINT_LABEL("");
+for (int p=0; p < m; p++) {
+    PRINT_LABEL("", 12);
+    printf("p%-2d", (int)pow(2,p));
     for (int b=1; b <= word_length; b++) {
         if (b & (1 << p)) {
             printf("[ X ]");
@@ -101,6 +103,8 @@ for (int p=0; p< m; p++) {
     }
     printf("\n");
 }
+
+printf("\n");
 memory = 0;
 write_data(0xffffffff);
 print_binary(memory);
@@ -110,13 +114,11 @@ print_binary(memory);
 
 void write_data(uint64_t data)  {
     
-int word_pos = -1;
+int word_pos = 1;
 int bit_pos = 0;
 
-for (int p=0; p< m; p++) {
-    word_pos++;
-    for (int d = 1; d < pow(2, p); d++) {
-        word_pos++;
+for (int p=0; p< m; p++, word_pos++) {
+    for (int d = 1; d < pow(2, p); d++, word_pos++) {
 
         if (data & (1<<bit_pos)) { //bit is 1
             memory |=  (uint64_t)(1L << word_pos);
@@ -135,11 +137,12 @@ for (int p=0; p< m; p++) {
 }
 
 void print_binary(uint64_t memory) {
-    for (int i=0; i<sizeof(uint64_t) * 8; i++) {
+    PRINT_LABEL("", 15);
+    for (int i=0; i < word_length; i++) {
         if (memory & (uint64_t)(1L << i)) {
-            printf(" 1");
+            printf("[ 1 ]");
         } else {
-            printf(" 0");
+            printf("[ 0 ]");
         }
     }
 
