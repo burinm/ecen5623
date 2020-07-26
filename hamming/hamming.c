@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 
 //https://gcc.gnu.org/onlinedocs/cpp/Stringizing.html (lame!)
@@ -19,6 +20,12 @@
 #define PRINT_LABEL_HELPER(s, l)    printf("%-" xstr(l) "s", s)
 #define PRINT_LABEL(s)  PRINT_LABEL_HELPER(s, LABEL_LEN)
 
+int m=0;
+uint64_t memory = 0;
+
+void write_data(uint64_t);
+void print_binary(uint64_t data);
+
 int main(int argc, char* argv[]) {
 
 if (argc !=2) {
@@ -26,7 +33,7 @@ if (argc !=2) {
     exit(0);
 }
 
-int m = atoi(argv[1]);
+m = atoi(argv[1]);
 
 if (m < 1) {
     printf("There must be at least 1 parity bit\n");
@@ -89,12 +96,52 @@ for (int p=0; p< m; p++) {
         if (b & (1 << p)) {
             printf("[ X ]");
         } else {
-
             printf("[   ]");
         }
     }
     printf("\n");
 }
+memory = 0;
+write_data(0xffffffff);
+print_binary(memory);
 
 }
 
+
+void write_data(uint64_t data)  {
+    
+int word_pos = -1;
+int bit_pos = 0;
+
+for (int p=0; p< m; p++) {
+    word_pos++;
+    for (int d = 1; d < pow(2, p); d++) {
+        word_pos++;
+
+        if (data & (1<<bit_pos)) { //bit is 1
+            memory |=  (uint64_t)(1L << word_pos);
+        } //else bit is 0 
+
+        //printf("writing word pos %d ,bit %d = %lu\n", word_pos, bit_pos,  memory & (uint64_t)(1L << word_pos));
+        //print_binary( (uint64_t)(1 << word_pos));
+        //print_binary(memory);
+
+        bit_pos++;
+
+        //printf("%d\n", word_pos);
+    }
+}
+
+}
+
+void print_binary(uint64_t memory) {
+    for (int i=0; i<sizeof(uint64_t) * 8; i++) {
+        if (memory & (uint64_t)(1L << i)) {
+            printf(" 1");
+        } else {
+            printf(" 0");
+        }
+    }
+
+printf("\n");
+}
