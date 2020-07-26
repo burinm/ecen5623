@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
+#include <assert.h>
 
 //https://gcc.gnu.org/onlinedocs/cpp/Stringizing.html (lame!)
 #define xstr(s) str(s)
@@ -107,7 +108,53 @@ for (int p=0; p < m; p++) {
 printf("\n");
 memory = 0;
 write_data(0xffffffff);
+printf("memory: data\n");
 print_binary(memory);
+
+for (int p=0; p < m; p++) {
+    int xor = 0;
+    int parity_count = 0;
+    for (int b=0; b < word_length; b++) {
+
+        if ((b+1) & (1 << p)) { //this bit is used in XOR
+            xor ^= (memory & (1L << b)) ? 1 : 0;
+            parity_count +=  (memory & (1L << b)) ? 1 : 0;
+            //printf("i:%d (%lu)\n", b, memory & (1L << b));
+        }
+    }
+    int p_pos = (int)pow(2,p);
+    //printf("XOR of p%d is %d\n", p_pos, xor);
+    //printf("parity count is %d\n", parity_count);
+assert ( parity_count % 2 == xor);
+    if (xor) {
+        //printf("setting parity at pos %d to 1\n", p_pos);
+        memory |= (1L << (p_pos -1)); //zero indexed
+    }
+}
+
+printf("memory: data + parity\n");
+print_binary(memory);
+
+for (int p=0; p < m; p++) {
+    int xor = 0;
+    int parity_count = 0;
+    for (int b=0; b < word_length; b++) {
+
+        if ((b+1) & (1 << p)) { //this bit is used in XOR
+            xor ^= (memory & (1L << b)) ? 1 : 0;
+            parity_count +=  (memory & (1L << b)) ? 1 : 0;
+            //printf("i:%d (%lu)\n", b, memory & (1L << b));
+        }
+    }
+    int p_pos = (int)pow(2,p);
+    //printf("XOR of p%d is %d\n", p_pos, xor);
+    //printf("parity count is %d\n", parity_count);
+assert ( parity_count % 2 == xor);
+    printf("c  %d is %d\n", p_pos, xor);
+}
+
+
+
 
 }
 
