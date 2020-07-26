@@ -11,6 +11,14 @@
 #include <stdlib.h>
 #include <math.h>
 
+//https://gcc.gnu.org/onlinedocs/cpp/Stringizing.html (lame!)
+#define xstr(s) str(s)
+#define str(s) #s
+
+#define LABEL_LEN   15
+#define PRINT_LABEL_HELPER(s, l)    printf("%-" xstr(l) "s", s)
+#define PRINT_LABEL(s)  PRINT_LABEL_HELPER(s, LABEL_LEN)
+
 int main(int argc, char* argv[]) {
 
 if (argc !=2) {
@@ -54,6 +62,39 @@ printf("data bits    : %.3d\n", data_length);
 printf("------------------\n");
 printf("word bits    : %.3d\n", word_length);
 
+//One based, because the documentation is 1 based
 
+// Header
+printf("\n");
+PRINT_LABEL("Bit"); 
+for (int b=1; b <= word_length; b++) {
+    printf(" %2.d  ", b);
+}
+printf("\n");
+
+PRINT_LABEL("");
+int d_num = 1;
+for (int p=0; p< m; p++) {
+    printf("[p%-2d]", (int)pow(2,p)); 
+    for (int d = 1; d < pow(2, p); d++) {
+        printf("[d%-2d]", d_num++); 
+    }
+}
+printf("\n");
+
+
+for (int p=0; p< m; p++) {
+    PRINT_LABEL("");
+    for (int b=1; b <= word_length; b++) {
+        if (b & (1 << p)) {
+            printf("[ X ]");
+        } else {
+
+            printf("[   ]");
+        }
+    }
+    printf("\n");
+}
 
 }
+
