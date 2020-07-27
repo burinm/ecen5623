@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
+#include <time.h>
 #include <assert.h>
 
 //https://gcc.gnu.org/onlinedocs/cpp/Stringizing.html (lame!)
@@ -27,8 +28,13 @@ uint64_t memory = 0;
 
 void write_data(uint64_t);
 void print_binary(uint64_t data);
+int get_check_bits();
 
 int main(int argc, char* argv[]) {
+
+struct timespec t;
+clock_gettime(CLOCK_MONOTONIC, &t);
+srand(t.tv_nsec);
 
 if (argc !=2) {
     printf("usage: hamming <m bits>\n");
@@ -106,8 +112,10 @@ for (int p=0; p < m; p++) {
 }
 
 printf("\n");
+uint64_t test = 0xffffffff;
+printf("----testing----%lu------\n", test);
 memory = 0;
-write_data(0xffffffff);
+write_data(test);
 printf("memory: data\n");
 print_binary(memory);
 
@@ -135,6 +143,22 @@ assert ( parity_count % 2 == xor);
 printf("memory: data + parity\n");
 print_binary(memory);
 
+get_check_bits();
+
+int r = rand() % word_length;
+printf("flip %dth bit!\n", r +1);
+memory ^= (1L << r);
+print_binary(memory);
+get_check_bits();
+
+
+
+
+
+}
+
+int get_check_bits() {
+int total_c = 0;
 for (int p=0; p < m; p++) {
     int xor = 0;
     int parity_count = 0;
@@ -151,11 +175,13 @@ for (int p=0; p < m; p++) {
     //printf("parity count is %d\n", parity_count);
 assert ( parity_count % 2 == xor);
     printf("c  %d is %d\n", p_pos, xor);
+    if (xor) {
+        total_c += p_pos;
+    }
 }
-
-
-
-
+printf("total c  %d\n", total_c);
+assert(total_c == 0);
+return total_c;
 }
 
 
