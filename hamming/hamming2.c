@@ -35,14 +35,38 @@ assert(word_bits + PARITY_WORD_BITS < sizeof(uint32_t) * 8);
 
 //10 fake memory slots
 uint32_t *memory = (uint32_t*)malloc(sizeof(uint32_t) *10);
+uint8_t result;
 
+//Test 1
+printf("\nTest1-------------------\n");
 write_w_hamming(0xff, &memory[1]);
 
 if (apply_parity(memory, READ_F) > 0) {
     printf("check bits failed!\n");
 }
 
-uint8_t result;
+result = 0;
+read_w_hamming(&result, &memory[1]);
+printf("Read back %u\n", result);
+
+//Test 2
+printf("\nTest2-------------------\n");
+write_w_hamming(0xff, &memory[1]);
+
+if (apply_parity(memory, READ_F) > 0) {
+    printf("check bits failed!\n");
+}
+
+int r = 6;
+printf("flip %dth bit!\n", r + 1);
+memory[1] ^= (1L << r);
+print_binary("flip", &memory[1]);
+
+if (apply_parity(memory, READ_F) > 0) {
+    printf("check bits failed!\n");
+}
+
+result = 0;
 read_w_hamming(&result, &memory[1]);
 printf("Read back %u\n", result);
 
@@ -56,12 +80,20 @@ int write_w_hamming(uint8_t value, uint32_t *memory) {
 }
 
 int read_w_hamming(uint8_t *value, uint32_t *memory) {
+
     int c = apply_parity(memory, READ_F);
+
     if (c == 0) {
-        *value = hamming_data(0, memory, READ_F); 
+        *value = hamming_data(0, memory, READ_F);
         return 1; 
     } else {
         printf("parity error! c=%d\n", c);
+        uint32_t mask = (uint32_t)(1 << (c - 1));
+        print_binary("mask", &mask);
+        *memory ^= mask; 
+        print_binary("corrected", memory);
+        *value = hamming_data(0, memory, READ_F); 
+        return 1;
     }
         
 return -1;
