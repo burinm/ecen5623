@@ -78,9 +78,11 @@ if (sem_init(&sem_W2, 0, 0) == -1) {
     exit(-1);
 }
 
+#if 0
 if (set_main_realtime() == -1) {
     exit(-1);
 }
+#endif
 
 
 printf("Creating S1\n");
@@ -144,35 +146,6 @@ memlog_dump("W2.log", W2_LOG);
 
 }
 
-int seq_count = 0;
-void sequencer(int v) {
-
-    int sequence = 0;
-
-    //printf("Start sequencer\n");
-
-    while(running) {
-        if (sequence % 5 == 0) { // 5 * 10 = 50ms, 20Hz
-            sem_post(&sem_S1);
-        }
-
-        if (sequence % 10 == 0) { // 10 * 10 = 100ms, 10Hz
-            sem_post(&sem_W1);
-        }
-
-        if (sequence % 100 == 0) { // 100 * 10 = 1000ms, 1Hz
-            sem_post(&sem_W2);
-        }
-
-        sequence++;
-
-        if (sequence == 500) {
-            sequence = 0;
-            //printf("tick\n");
-        }
-    }
-
-}
 
 void* S1(void* v) {
     int ret = -1; 
@@ -191,6 +164,8 @@ void* S1(void* v) {
         MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_DONE);
 
         if (count > 200) {
+            sem_post(&sem_W1);
+            sem_post(&sem_W2);
             running = 0;
         }
 
@@ -247,6 +222,34 @@ void* W2(void* v) {
         }
     }
 return ((void*)0); 
+}
+
+int seq_count = 0;
+void sequencer(int v) {
+
+    //printf("Start sequencer\n");
+
+    while(running) {
+        if (seq_count % 5 == 0) { // 5 * 10 = 50ms, 20Hz
+            //printf("tick\n");
+            sem_post(&sem_S1);
+        }
+
+        if (seq_count % 10 == 0) { // 10 * 10 = 100ms, 10Hz
+            sem_post(&sem_W1);
+        }
+
+        if (seq_count % 100 == 0) { // 100 * 10 = 1000ms, 1Hz
+            sem_post(&sem_W2);
+        }
+
+        seq_count++;
+
+        if (seq_count == 500) {
+            seq_count = 0;
+        }
+    }
+
 }
 
 void ctrl_c(int s) {

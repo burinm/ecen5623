@@ -17,7 +17,7 @@ int set_main_realtime() { //TODO - for now, this is sharing processor 1
 
     cpu_set_t threadcpu;
     CPU_ZERO(&threadcpu);
-    int coreid = PROCESSOR_ONE;
+    int coreid = SYNCHONOME_CPU;
     CPU_SET(coreid, &threadcpu);
 
     if (sched_setaffinity(getpid(), sizeof(cpu_set_t), &threadcpu) == -1) {
@@ -59,7 +59,39 @@ int schedule_realtime(pthread_attr_t *attr) {
     //For now, AMP design, procesor 1
     cpu_set_t threadcpu;
     CPU_ZERO(&threadcpu);
-    int coreid = PROCESSOR_ONE;
+    int coreid = SYNCHONOME_CPU;
+    CPU_SET(coreid, &threadcpu);
+
+    if (pthread_attr_setaffinity_np(attr, sizeof(cpu_set_t), &threadcpu) != 0) {
+        perror("pthread_attr_setaffinity_np");
+        return -1;
+    }
+
+return 0;
+}
+
+int schedule_best_effort(pthread_attr_t *attr, int cpu) {
+    //Setup realtime threads' schedule policy
+    if (pthread_attr_init(attr) != 0) {
+        perror("pthread_attr_init");
+        return -1;
+    }
+
+#if 0 //Don't do this, other wise threads don't run
+    if (pthread_attr_setinheritsched(attr, PTHREAD_EXPLICIT_SCHED) != 0) {
+        perror("pthread_attr_setinheritsched");
+        return -1;
+    }
+#endif
+
+    if (pthread_attr_setschedpolicy(attr, SCHED_OTHER) != 0) {
+        perror("pthread_attr_setschedpolicy");
+        return -1;
+    }
+
+    cpu_set_t threadcpu;
+    CPU_ZERO(&threadcpu);
+    int coreid = cpu;
     CPU_SET(coreid, &threadcpu);
 
     if (pthread_attr_setaffinity_np(attr, sizeof(cpu_set_t), &threadcpu) != 0) {
