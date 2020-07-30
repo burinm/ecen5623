@@ -194,12 +194,11 @@ void* S1(void* v) {
 
         if (count == 200) {
             printf("S1 done sending\n");
-            while (w1_running && w2_running) {
+            while (w1_running == 1 && w2_running == 1) {
                 //wait for other threads to process
             }
             running = 0;
         }
-
 
         if (ret == -1) {
             perror("sem_wait sem_S1 failed");
@@ -234,9 +233,9 @@ void* W1(void* v) {
         if (dequeue_P(&W1_Q, &num2) == -1) {
             printf("W1 failed to dequeue #2 from W1_Q\n");
         }
-        w2_dequeue_count +=2;
 
         printf("W1 got %d %d\n", num1, num2);
+        w2_dequeue_count +=2;
 
         sum = num1 + num2;
         MEMLOG_LOG24(W1_LOG, MEMLOG_E_W1_DATA_24, sum);
@@ -255,8 +254,8 @@ void* W1(void* v) {
                 return ((void*)-2); 
             }
         }
-        if (w2_dequeue_count > 200) {
-            printf("W2 done receiving/sending\n");
+        if (w2_dequeue_count > 198) {
+            printf("W1 done receiving/sending\n");
             w1_running = 0;
             return ((void*)0);
         }
