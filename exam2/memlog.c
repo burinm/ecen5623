@@ -39,7 +39,7 @@ inline void MEMLOG_LOG(memlog_t* l, uint32_t event) {
 inline void MEMLOG_LOG24(memlog_t* l, uint32_t event, uint32_t data) {
 
     assert(data < 0x1000000);
-    assert(event >= MEMLOG_E_ADATA_24);
+    assert(event >= MEMLOG_E_S1_DATA_24);
     assert(l->index < MEMLOG_MAX); //TODO remove assert
 
     l->log[l->index].event_id = MEMLOG_ENCODE24(event, data);
@@ -80,7 +80,7 @@ void memlog_dump(char* f, memlog_t* l) {
 
             dprintf(fd, "diff = %lld.%.9ld", (long long)diff.tv_sec, diff.tv_nsec);
 
-            if (MEMLOG_ID(l->log[i].event_id) >= MEMLOG_E_ADATA_24) {
+            if (MEMLOG_ID(l->log[i].event_id) >= MEMLOG_E_S1_DATA_24) {
                 dprintf(fd, " data:%u\n", MEMLOG_DATA24(l->log[i].event_id));
             } else {
                 dprintf(fd, "%s", not_increasing == 1 ? " *not in order" : "");
@@ -153,15 +153,15 @@ char* memlog_event_desc(uint32_t e) {
             return "MEMLOG_E_ERROR_SCAN";
             break;
 
-        case MEMLOG_E_ADATA_24:
+        case MEMLOG_E_S1_DATA_24:
             return "MEMLOG_E_ADATA";
             break;
 
-        case MEMLOG_E_BDATA_24:
+        case MEMLOG_E_W1_DATA_24:
             return "MEMLOG_E_BDATA";
             break;
 
-        case MEMLOG_E_CDATA_24:
+        case MEMLOG_E_W2_DATA_24:
             return "MEMLOG_E_CDATA";
             break;
 

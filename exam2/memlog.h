@@ -44,9 +44,9 @@ typedef struct _memlog_g {
 #define MEMLOG_E_ERROR_SCAN    0x20
 
 //Data logging events
-#define MEMLOG_E_ADATA_24       0xf0
-#define MEMLOG_E_BDATA_24       0xf1
-#define MEMLOG_E_CDATA_24       0xf2
+#define MEMLOG_E_S1_DATA_24       0xf0
+#define MEMLOG_E_W1_DATA_24       0xf1
+#define MEMLOG_E_W2_DATA_24       0xf2
 #define MEMLOG_E_FIB_TEST      0xff
 
 //Field manipulation

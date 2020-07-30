@@ -9,7 +9,8 @@
 #include <errno.h>
 
 #include "realtime.h"
-#include "timetools.h"
+//#include "timetools.h"
+#include "resources.h"
 #include "memlog.h"
 
 void ctrl_c(int s);
@@ -44,6 +45,8 @@ void* W2(void* v);
 #define PERIOD_NS   10000000 //10ms
 
 int running = 1;
+int w1_running = 1;
+int w2_running = 1;
 
 int main() {
 
@@ -75,6 +78,27 @@ if (sem_init(&sem_W1, 0, 0) == -1) {
 
 if (sem_init(&sem_W2, 0, 0) == -1) {
     perror("Couldn't init semaphore sem_framegrab");
+    exit(-1);
+}
+
+//initialize Qs
+if (init_queue(&W1_Q) == -1) {
+    printf("couldn't init W1_Q\n");
+    exit(-1);
+}
+
+if (init_queue(&W2_Q) == -1) {
+    printf("couldn't init W2_Q\n");
+    exit(-1);
+}
+
+if (flush_queue(&W1_Q) == -1) {
+    printf("couldn't flush W1_Q\n");
+    exit(-1);
+}
+
+if (flush_queue(&W2_Q) == -1) {
+    printf("couldn't flush W2_Q\n");
     exit(-1);
 }
 
@@ -154,18 +178,25 @@ void* S1(void* v) {
     printf("S1 started\n");
     while(running) {
 
-        printf("S1 waiting\n");
         ret = sem_wait(&sem_S1);
 
         MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_RUN);
         count++;
-        printf("send %d\n", count);
+        printf("S1 send %d\n", count);
+
         //do work
+        if (enqueue_P(&W1_Q, &count) == -1) {
+            printf("S1 failed to enqueue to W1_Q\n"); 
+        }
+
+        MEMLOG_LOG24(S1_LOG, MEMLOG_E_S1_DATA_24, count);
         MEMLOG_LOG(S1_LOG, MEMLOG_E_S1_DONE);
 
-        if (count > 200) {
-            sem_post(&sem_W1);
-            sem_post(&sem_W2);
+        if (count == 200) {
+            printf("S1 done sending\n");
+            while (w1_running && w2_running) {
+                //wait for other threads to process
+            }
             running = 0;
         }
 
@@ -182,6 +213,11 @@ return ((void*)0);
 
 void* W1(void* v) {
     int ret = -1; 
+    int sum = 0;
+    int num1 = 0;
+    int num2 = 0;
+
+    int w2_dequeue_count = 0;
 
     printf("W1 started\n");
     while(running) {
@@ -189,7 +225,27 @@ void* W1(void* v) {
         ret = sem_wait(&sem_W1);
 
         MEMLOG_LOG(W1_LOG, MEMLOG_E_W1_RUN);
+
         //do work
+        if (dequeue_P(&W1_Q, &num1) == -1) {
+            printf("W1 failed to dequeue #1 from W1_Q\n");
+        }
+
+        if (dequeue_P(&W1_Q, &num2) == -1) {
+            printf("W1 failed to dequeue #2 from W1_Q\n");
+        }
+        w2_dequeue_count +=2;
+
+        printf("W1 got %d %d\n", num1, num2);
+
+        sum = num1 + num2;
+        MEMLOG_LOG24(W1_LOG, MEMLOG_E_W1_DATA_24, sum);
+
+        printf("W1 enqueue %d\n", sum);
+        if (enqueue_P(&W2_Q, &sum) == -1) {
+            printf("W1 failed to enqueue to W2_Q\n");
+        }
+
         MEMLOG_LOG(W1_LOG, MEMLOG_E_W1_DONE);
 
 
@@ -199,6 +255,11 @@ void* W1(void* v) {
                 return ((void*)-2); 
             }
         }
+        if (w2_dequeue_count > 200) {
+            printf("W2 done receiving/sending\n");
+            w1_running = 0;
+            return ((void*)0);
+        }
     }
 return ((void*)0); 
 }
@@ -206,12 +267,26 @@ return ((void*)0);
 void* W2(void* v) {
     int ret = -1; 
 
+    int total_sum = 0;
+    int total_count = 0;
+    int get;
+
     printf("W2 started\n");
     while(running) {
 
         ret = sem_wait(&sem_W2);
         MEMLOG_LOG(W2_LOG, MEMLOG_E_W2_RUN);
         //do work
+
+        if (dequeue_P(&W2_Q, &get) == -1) {
+            printf("W2 failed to dequeue from W2_Q\n");
+        }
+
+        printf("W2 got %d \n", get);
+        total_sum += get;
+        total_count++;
+
+        MEMLOG_LOG24(W2_LOG, MEMLOG_E_W2_DATA_24, total_sum);
         MEMLOG_LOG(W2_LOG, MEMLOG_E_W2_DONE);
 
         if (ret == -1) {
@@ -219,6 +294,11 @@ void* W2(void* v) {
             if (errno == EINTR) {
                 return ((void*)-2); 
             }
+        }
+        if (total_count == 100) {
+            printf("W2 done - %d\n", total_count);
+            w2_running = 0;
+            return ((void*)0);
         }
     }
 return ((void*)0); 
@@ -253,5 +333,9 @@ void sequencer(int v) {
 }
 
 void ctrl_c(int s) {
+    printf("ctrl-c\n");
+    sem_post(&sem_S1);
+    sem_post(&sem_W1);
+    sem_post(&sem_W2);
     running = 0;
 }
