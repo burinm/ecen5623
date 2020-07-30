@@ -31,6 +31,9 @@ pthread_t thread_W2;
 void* W1(void* v);
 memlog_t* W2_LOG;
 
+sem_t running_W1;
+sem_t running_W2;
+
 pthread_attr_t rt_sched_attr;  // For realtime H/M/L threads
 
 void* S1(void* v);
@@ -42,11 +45,10 @@ void* W2(void* v);
 #define NUM_ITERS   30000 // 5minutes / 10ms = 30000
 
 //#define PERIOD_NS   10000000
-#define PERIOD_NS   10000000 //10ms
+//#define PERIOD_NS   10000000 //10ms
+#define PERIOD_NS   1000000 //1ms turbo for testing
 
 int running = 1;
-int w1_running = 1;
-int w2_running = 1;
 
 int main() {
 
@@ -77,6 +79,18 @@ if (sem_init(&sem_W1, 0, 0) == -1) {
 }
 
 if (sem_init(&sem_W2, 0, 0) == -1) {
+    perror("Couldn't init semaphore sem_framegrab");
+    exit(-1);
+}
+
+//Process control semaphores
+
+if (sem_init(&running_W1, 0, 0) == -1) {
+    perror("Couldn't init semaphore sem_framegrab");
+    exit(-1);
+}
+
+if (sem_init(&running_W2, 0, 0) == -1) {
     perror("Couldn't init semaphore sem_framegrab");
     exit(-1);
 }
@@ -194,9 +208,10 @@ void* S1(void* v) {
 
         if (count == 200) {
             printf("S1 done sending\n");
-            while (w1_running == 1 && w2_running == 1) {
-                //wait for other threads to process
-            }
+
+            //wait for other threads to process
+            sem_wait(&running_W1);
+            sem_wait(&running_W2);
             running = 0;
         }
 
@@ -256,7 +271,7 @@ void* W1(void* v) {
         }
         if (w2_dequeue_count > 198) {
             printf("W1 done receiving/sending\n");
-            w1_running = 0;
+            sem_post(&running_W1);
             return ((void*)0);
         }
     }
@@ -295,8 +310,8 @@ void* W2(void* v) {
             }
         }
         if (total_count == 100) {
-            printf("W2 done - %d\n", total_count);
-            w2_running = 0;
+            printf("W2 done - %d\n", total_sum);
+            sem_post(&running_W2);
             return ((void*)0);
         }
     }
@@ -308,7 +323,7 @@ void sequencer(int v) {
 
     //printf("Start sequencer\n");
 
-    while(running) {
+    if (running) {
         if (seq_count % 5 == 0) { // 5 * 10 = 50ms, 20Hz
             //printf("tick\n");
             sem_post(&sem_S1);
