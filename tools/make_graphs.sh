@@ -21,3 +21,8 @@ cat master.log | ./diagram_services.py MEMLOG_E_S3_RUN MEMLOG_E_S3_DONE 3 $1 $2 
 ~/synchronome/simple-capture/wcet/timediff.py master.log MEMLOG_E_S2_DONE | awk '{print $1 " " $3}' | ./diagram_filter.py $1 $2 > jitter_S2.dat
 
 ~/synchronome/simple-capture/wcet/timediff.py master.log MEMLOG_E_S3_DONE | awk '{print $1 " " $3}' | ./diagram_filter.py $1 $2 > jitter_S3.dat
+
+#ssh 10.0.0.17 -C ~/synchronome/simple-capture/make_timestamps.sh ~/synchronome/simple-capture/frames ppm > timestamps.log
+#scp 10.0.0.17:~/synchronome/simple-capture/timestamps.log .
+~/synchronome/simple-capture/make_timestamps.sh ~/frames ppm > timestamps.log
+~/synchronome/simple-capture/wcet/timediff.py timestamps.log | awk '{print $1 " " $3}' | ./diagram_filter.py $1 $2 > jitter_frames.dat

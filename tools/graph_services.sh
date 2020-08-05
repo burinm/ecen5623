@@ -22,3 +22,8 @@ gnuplot --persist -e "set xlabel \"ms\"" \
                   -e "set ylabel \"jitter\"" \
                   -e "set title \"Jitter S3\"" \
                   -e "plot 'jitter_S3.dat' using 2:1 with lines"
+
+gnuplot --persist -e "set xlabel \"ms\"" \
+                  -e "set ylabel \"jitter\"" \
+                  -e "set title \"Frame Jitter\"" \
+                  -e "plot 'jitter_frames.dat' using 2:1 with lines"
