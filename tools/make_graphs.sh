@@ -1,7 +1,16 @@
 #!/bin/bash
 
-cat ~/frames/*.log | sort -n > master.log
+if [ "$#" -ne 2 ]; then
+    echo "usage: make_graphs <start_ms> <end_ms>"
+    exit 0
+fi
 
-cat master.log | ./diagram_services.py MEMLOG_E_S1_RUN MEMLOG_E_S1_DONE 1 > service1.dat 
-cat master.log | ./diagram_services.py MEMLOG_E_S2_RUN MEMLOG_E_S2_DONE 2 > service2.dat 
-cat master.log | ./diagram_services.py MEMLOG_E_S3_RUN MEMLOG_E_S3_DONE 3 > service3.dat 
+START_TIME=$1
+FINISH_TIME=$2
+
+scp 10.0.0.17:~/synchronome/simple-capture/*.log .
+cat *.log | sort -n > master.log
+
+cat master.log | ./diagram_services.py MEMLOG_E_S1_RUN MEMLOG_E_S1_DONE 1 $1 $2 > service1.dat 
+cat master.log | ./diagram_services.py MEMLOG_E_S2_RUN MEMLOG_E_S2_DONE 2 $1 $2 > service2.dat 
+cat master.log | ./diagram_services.py MEMLOG_E_S3_RUN MEMLOG_E_S3_DONE 3 $1 $2 > service3.dat 

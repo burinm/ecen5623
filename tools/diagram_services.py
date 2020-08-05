@@ -5,13 +5,16 @@
 
 import sys
 
-if len(sys.argv) != 4:
-    print("usage: diagram SERVICE_START SERVICE_FINISH NUM"); 
+if len(sys.argv) != 6:
+    print("usage: diagram SERVICE_START SERVICE_FINISH NUM start_ms finish_ms"); 
     sys.exit(0)
 
 service_start = sys.argv[1]
 service_finish = sys.argv[2]
-service_num = sys.argv[3]
+service_num = int(sys.argv[3])
+
+start_ms = int(sys.argv[4])
+finish_ms = int(sys.argv[5])
 
 data_file = None
 
@@ -63,16 +66,16 @@ for l in data_file:
         found = False 
 
         # if last_timestamp is not None:
-        if current_timestamp < 20000:  # for now only graph up to 1 seconds
+        if current_timestamp > start_ms and current_timestamp < finish_ms:  # for now only graph up to 1 seconds
             # This point completes each vertical line (transistion) on the timing plot
             if service == service_start: 
-                service_num_start = service_num 
-                service_num_finish = 0
+                service_num_start = service_num * 2 
+                service_num_finish = service_num * 2 - 1
                 found = True 
 
             if service == service_finish: 
-                service_num_start = 0
-                service_num_finish = service_num
+                service_num_start = service_num * 2 - 1 
+                service_num_finish = service_num * 2
                 found = True 
 
             if found == True:    
