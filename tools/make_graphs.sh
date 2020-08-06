@@ -42,3 +42,13 @@ ${TIME_DIFF} master.log MEMLOG_E_S3_DONE | awk '{print $1 " " $3}' | ${DIAGRAM_F
 #~/synchronome/simple-capture/make_timestamps.sh ./frames ppm > timestamps.log
 echo "Creating Frame jitter data"
 ${TIME_DIFF} timestamps.log | awk '{print $1 " " $3}' | ${DIAGRAM_FILTER} $1 $2 > jitter_frames.dat
+
+#wcets
+echo "Creating C1 jitter data"
+${TIME_DIFF} frame.log MEMLOG_E_WCET_START MEMLOG_E_S1_DONE | grep MEMLOG_E_S1_DONE | awk '{print $1 " " $3}' | ${DIAGRAM_FILTER} $1 $2 > jitter_C1.dat
+
+echo "Creating C2 jitter data"
+${TIME_DIFF} processing.log MEMLOG_E_WCET_START MEMLOG_E_S2_DONE | grep MEMLOG_E_S2_DONE | awk '{print $1 " " $3}' | ${DIAGRAM_FILTER} $1 $2 > jitter_C2.dat
+
+echo "Creating C3 jitter data"
+${TIME_DIFF} writeout.log MEMLOG_E_WCET_START MEMLOG_E_S3_DONE | grep MEMLOG_E_S3_DONE | awk '{print $1 " " $3}' | ${DIAGRAM_FILTER} $1 $2 > jitter_C3.dat
