@@ -21,9 +21,9 @@ data_file = None
 try:
     data_file = sys.stdin
 except:
-    print("Couldn't open <stdin>"); 
+    print("Couldn't open <stdin>");
     sys.exit(0)
-    
+
 timestamp = None
 first_timestamp = None
 last_timestamp = None
@@ -40,49 +40,44 @@ for l in data_file:
         continue 
     else:
         values = l.split()
-        timestamp = values[0]
-        service = values[1]
+        if len(values) >= 2:
+            timestamp = values[0]
+            service = values[1]
 
-        # print(timestamp, service)
+            (sec, nsec) = timestamp.split(".")
 
-        (sec, nsec) = timestamp.split(".")
-
-        # Put Timestamps ms 
-        timestamp = int(sec) * 1000
-        timestamp += int(nsec) / 1000000
+            # Put Timestamps ms
+            timestamp = int(sec) * 1000
+            timestamp += int(nsec) / 1000000
 
 
-        if first_entry is True:
-           relative_offset = timestamp
-           # print("{0}".format(service), end = ' ')
-           # print(0, end = '\n')
-           first_entry = False
-           # plot 0,0 as first datum
-           continue
+            if first_entry is True:
+               relative_offset = timestamp
+               first_entry = False
+               # plot 0,0 as first datum
+               continue
 
-        # absolute
-        current_timestamp = timestamp - relative_offset
+            # absolute
+            current_timestamp = timestamp - relative_offset
 
-        found = False 
+            found = False
 
-        # if last_timestamp is not None:
-        if current_timestamp > start_ms and current_timestamp < finish_ms:  # for now only graph up to 1 seconds
-            # This point completes each vertical line (transistion) on the timing plot
-            if service == service_start: 
-                service_num_start = service_num * 2 
-                service_num_finish = service_num * 2 - 1
-                found = True 
+            # if last_timestamp is not None:
+            if current_timestamp > start_ms and current_timestamp < finish_ms:
+                # This point completes each vertical line (transistion) on the timing plot
+                if service == service_start:
+                    service_num_start = service_num * 2
+                    service_num_finish = service_num * 2 - 1
+                    found = True
 
-            if service == service_finish: 
-                service_num_start = service_num * 2 - 1 
-                service_num_finish = service_num * 2
-                found = True 
+                if service == service_finish:
+                    service_num_start = service_num * 2 - 1
+                    service_num_finish = service_num * 2
+                    found = True
 
-            if found == True:    
-                print("{0}".format(service_num_finish), end = ' ')
-                print(current_timestamp, end = '\n')
+                if found == True:
+                    print("{0}".format(service_num_finish), end = ' ')
+                    print(current_timestamp, end = '\n')
 
-                print("{0}".format(service_num_start), end = ' ')
-                print(current_timestamp, end = '\n')
-
-        # last_timestamp = current_timestamp
+                    print("{0}".format(service_num_start), end = ' ')
+                    print(current_timestamp, end = '\n')

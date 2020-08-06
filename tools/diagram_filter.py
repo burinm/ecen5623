@@ -32,7 +32,7 @@ for l in data_file:
         continue 
     else:
         values = l.split()
-        if len(values) == 2:
+        if len(values) >= 2:
             timestamp = values[0]
             jitter = values[1]
 
