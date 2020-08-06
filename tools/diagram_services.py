@@ -5,9 +5,18 @@
 
 import sys
 
-if len(sys.argv) != 6:
-    print("usage: diagram SERVICE_START SERVICE_FINISH NUM start_ms finish_ms"); 
+def time_in_ms(timestamp_string):
+    (sec, nsec) = timestamp_string.split(".")
+    # Put Timestamps ms
+    timestamp = int(sec) * 1000
+    timestamp += int(nsec) / 1000000
+
+    return timestamp
+
+if not (len(sys.argv) == 6 or len(sys.argv) == 7):
+    print("usage: diagram SERVICE_START SERVICE_FINISH NUM start_ms finish_ms <absolute>");
     sys.exit(0)
+
 
 service_start = sys.argv[1]
 service_finish = sys.argv[2]
@@ -15,6 +24,10 @@ service_num = int(sys.argv[3])
 
 start_ms = int(sys.argv[4])
 finish_ms = int(sys.argv[5])
+
+absolute_timestamp = None
+if len(sys.argv) == 7:
+    absolute_timestamp = sys.argv[6]
 
 data_file = None
 
@@ -41,21 +54,19 @@ for l in data_file:
     else:
         values = l.split()
         if len(values) >= 2:
-            timestamp = values[0]
+            timestamp_string = values[0]
             service = values[1]
 
-            (sec, nsec) = timestamp.split(".")
-
-            # Put Timestamps ms
-            timestamp = int(sec) * 1000
-            timestamp += int(nsec) / 1000000
-
+            timestamp= time_in_ms(timestamp_string)
 
             if first_entry is True:
-               relative_offset = timestamp
-               first_entry = False
-               # plot 0,0 as first datum
-               continue
+                if absolute_timestamp is None:
+                   relative_offset = timestamp
+                   first_entry = False
+                else:
+                    relative_offset = time_in_ms(absolute_timestamp)
+                    first_entry = False
+
 
             # absolute
             current_timestamp = timestamp - relative_offset
