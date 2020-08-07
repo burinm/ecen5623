@@ -12,6 +12,9 @@ fi
 START_TIME=$1
 FINISH_TIME=$2
 
+# Chicken / Egg problem with first_timestamp.sh
+cat  frame.log processing.log writeout.log | sort -n > master.log
+
 FIRST_TIMESTAMP=`~/ecen5623/tools/first_timestamp.sh`
 
 rm -f fit.log
@@ -21,8 +24,6 @@ rm -f *.dat
 #scp 10.0.0.17:~/synchronome/simple-capture/processing.log .
 #scp 10.0.0.17:~/synchronome/simple-capture/writeout.log .
 
-# Chicken / Egg problem with first_timestamp.sh
-cat  frame.log processing.log writeout.log | sort -n > master.log
 
 echo "Creating service run data"
 cat master.log | ${DIAGRAM_SERVICES} MEMLOG_E_S1_RUN MEMLOG_E_S1_DONE 1 $1 $2 ${FIRST_TIMESTAMP} > service1.dat
