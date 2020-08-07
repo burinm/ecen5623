@@ -21,6 +21,7 @@ rm -f *.dat
 #scp 10.0.0.17:~/synchronome/simple-capture/processing.log .
 #scp 10.0.0.17:~/synchronome/simple-capture/writeout.log .
 
+# Chicken / Egg problem with first_timestamp.sh
 cat  frame.log processing.log writeout.log | sort -n > master.log
 
 echo "Creating service run data"

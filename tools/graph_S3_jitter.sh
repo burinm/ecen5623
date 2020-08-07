@@ -2,11 +2,11 @@
 
 
 gnuplot --persist -e "set xlabel \"ms\"" \
-                  -e "set ylabel \"jitter\"" \
+                  -e "set ylabel \"jitter ms\"" \
                   -e "set title \"Jitter for S3 (writeout)\"" \
                   -e "f(x) = m*x + b" \
                   -e "fit f(x) 'jitter_S3.dat' using 2:1 via m,b" \
-                  -e "plot 'jitter_S3.dat' using 2:1 with lines, \
+                  -e "plot 'jitter_S3.dat' using 2:1 with lines linetype 3, \
                   f(x) title sprintf(\"y = %.5fx + %.2f\", m, b)"
 
 #For printing slope!

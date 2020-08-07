@@ -1,9 +1,9 @@
 #!/bin/bash
 
 gnuplot --persist -e "set xlabel \"ms\"" \
-                  -e "set ylabel \"jitter\"" \
+                  -e "set ylabel \"jitter ms\"" \
                   -e "set yrange [38.5:41.5]" \
-                  -e "set title \"Jitter for S1\"" \
+                  -e "set title \"Jitter for S1 (frame capture)\"" \
                   -e "f(x) = m*x + b" \
                   -e "fit f(x) 'jitter_S1.dat' using 2:1 via m,b" \
                   -e "plot 'jitter_S1.dat' using 2:1 with lines, \
